@@ -1,19 +1,32 @@
-from fastapi import FastAPI, HTTPException
+from bson import ObjectId
+from fastapi.middleware.cors import CORSMiddleware
 from app.database import medicines_collection, icd10_collection, users_collection
 from app.models.medicine import Medicine
 from app.models.user import UserCreate
+from app.models.auth import UserLogin
 from datetime import datetime
 from app.security import (
     hash_password,
     verify_password,
-    create_access_token
+    create_access_token,
+    decode_access_token
 )
-from app.models import user
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 app = FastAPI(
     title="MediGuide AI API"
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 def home():
@@ -420,4 +433,82 @@ def login_user(user: UserLogin):
         "message": "Login successful",
         "access_token": access_token,
         "token_type": "bearer"
+    }
+
+# --------------------------------------------------
+# JWT AUTHENTICATION
+# --------------------------------------------------
+
+security = HTTPBearer()
+
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+
+    token = credentials.credentials
+
+    payload = decode_access_token(token)
+
+    if not payload:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired token"
+        )
+
+    return payload
+
+# --------------------------------------------------
+# GET CURRENT USER
+# --------------------------------------------------
+
+# --------------------------------------------------
+# GET CURRENT USER
+# --------------------------------------------------
+
+@app.get("/users/me")
+def get_current_user_info(
+    current_user: dict = Depends(get_current_user)
+):
+
+    user_id = current_user.get("sub")
+
+    if not user_id:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid token"
+        )
+
+    try:
+        object_id = ObjectId(user_id)
+    except Exception:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid user ID"
+        )
+
+    existing_user = users_collection.find_one(
+        {
+            "_id": object_id
+        },
+        {
+            "password": 0
+        }
+    )
+
+    if not existing_user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    return {
+        "message": "Authenticated user",
+        "user": {
+            "id": str(existing_user["_id"]),
+            "name": existing_user.get("name"),
+            "email": existing_user.get("email"),
+            "language": existing_user.get("language"),
+            "created_at": existing_user.get("created_at")
+        }
     }
