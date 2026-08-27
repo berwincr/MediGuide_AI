@@ -1,0 +1,182 @@
+[
+  {
+    "code": "A41.9",
+    "description": "Sepsis, unspecified organism",
+    "chapter": "Certain infectious and parasitic diseases",
+    "source": "ICD-10-CM"
+  },
+  {
+    "code": "A41.02",
+    "description": "Sepsis due to methicillin resistant Staphylococcus aureus",
+    "chapter": "Certain infectious and parasitic diseases",
+    "source": "ICD-10-CM"
+  },
+  {
+    "code": "A92.5",
+    "description": "Zika virus disease",
+    "chapter": "Certain infectious and parasitic diseases",
+    "source": "ICD-10-CM"
+  },
+  {
+    "code": "B20",
+    "description": "Human immunodeficiency virus [HIV] disease",
+    "chapter": "Certain infectious and parasitic diseases",
+    "source": "ICD-10-CM"
+  },
+  {
+    "code": "C25.9",
+    "description": "Malignant neoplasm of pancreas, unspecified",
+    "chapter": "Neoplasms",
+    "source": "ICD-10-CM"
+  },
+  {
+    "code": "D63.0",
+    "description": "Anemia in neoplastic disease",
+    "chapter": "Diseases of the blood and blood-forming organs",
+    "source": "ICD-10-CM"
+  },
+  {
+    "code": "E11.A",
+    "description": "Type 2 diabetes mellitus without complications in remission",
+    "chapter": "Endocrine, nutritional and metabolic diseases",
+    "source": "ICD-10-CM"
+  },
+  {
+    "code": "F10.20",
+    "description": "Alcohol dependence, uncomplicated",
+    "chapter": "Mental, behavioral and neurodevelopmental disorders",
+    "source": "ICD-10-CM"
+  },
+  {
+    "code": "G89.3",
+    "description": "Neoplasm related pain",
+    "chapter": "Diseases of the nervous system",
+    "source": "ICD-10-CM"
+  },
+  {
+    "code": "H54.7",
+    "description": "Unspecified visual loss",
+    "chapter": "Diseases of the eye and adnexa",
+    "source": "ICD-10-CM"
+  },
+  {
+    "code": "I10",
+    "description": "Essential (primary) hypertension",
+    "chapter": "Diseases of the circulatory system",
+    "source": "ICD-10-CM"
+  },
+  {
+    "code": "I21.3",
+    "description": "ST elevation (STEMI) myocardial infarction of unspecified site",
+    "chapter": "Diseases of the circulatory system",
+    "source": "ICD-10-CM"
+  },
+  {
+    "code": "I21.4",
+    "description": "Non-ST elevation (NSTEMI) myocardial infarction",
+    "chapter": "Diseases of the circulatory system",
+    "source": "ICD-10-CM"
+  },
+  {
+    "code": "I21.9",
+    "description": "Acute myocardial infarction, unspecified",
+    "chapter": "Diseases of the circulatory system",
+    "source": "ICD-10-CM"
+  },
+  {
+    "code": "J15.212",
+    "description": "Pneumonia due to methicillin resistant Staphylococcus aureus",
+    "chapter": "Diseases of the respiratory system",
+    "source": "ICD-10-CM"
+  },
+  {
+    "code": "J20.8",
+    "description": "Acute bronchitis due to other specified organisms",
+    "chapter": "Diseases of the respiratory system",
+    "source": "ICD-10-CM"
+  },
+  {
+    "code": "J22",
+    "description": "Unspecified acute lower respiratory infection",
+    "chapter": "Diseases of the respiratory system",
+    "source": "ICD-10-CM"
+  },
+  {
+    "code": "J40",
+    "description": "Bronchitis, not specified as acute or chronic",
+    "chapter": "Diseases of the respiratory system",
+    "source": "ICD-10-CM"
+  },
+  {
+    "code": "J80",
+    "description": "Acute respiratory distress syndrome",
+    "chapter": "Diseases of the respiratory system",
+    "source": "ICD-10-CM"
+  },
+  {
+    "code": "M54.2",
+    "description": "Cervicalgia",
+    "chapter": "Diseases of the musculoskeletal system",
+    "source": "ICD-10-CM"
+  },
+  {
+    "code": "N18.6",
+    "description": "End stage renal disease",
+    "chapter": "Diseases of the genitourinary system",
+    "source": "ICD-10-CM"
+  },
+  {
+    "code": "O85",
+    "description": "Puerperal sepsis",
+    "chapter": "Pregnancy, childbirth and the puerperium",
+    "source": "ICD-10-CM"
+  },
+  {
+    "code": "R03.0",
+    "description": "Elevated blood-pressure reading, without diagnosis of hypertension",
+    "chapter": "Symptoms, signs and abnormal clinical/laboratory findings",
+    "source": "ICD-10-CM"
+  },
+  {
+    "code": "R05.1",
+    "description": "Acute cough",
+    "chapter": "Symptoms, signs and abnormal clinical/laboratory findings",
+    "source": "ICD-10-CM"
+  },
+  {
+    "code": "R05.9",
+    "description": "Cough, unspecified",
+    "chapter": "Symptoms, signs and abnormal clinical/laboratory findings",
+    "source": "ICD-10-CM"
+  },
+  {
+    "code": "R06.02",
+    "description": "Shortness of breath",
+    "chapter": "Symptoms, signs and abnormal clinical/laboratory findings",
+    "source": "ICD-10-CM"
+  },
+  {
+    "code": "R50.9",
+    "description": "Fever, unspecified",
+    "chapter": "Symptoms, signs and abnormal clinical/laboratory findings",
+    "source": "ICD-10-CM"
+  },
+  {
+    "code": "U07.1",
+    "description": "COVID-19",
+    "chapter": "Codes for special purposes",
+    "source": "ICD-10-CM"
+  },
+  {
+    "code": "U09.9",
+    "description": "Post COVID-19 condition, unspecified",
+    "chapter": "Codes for special purposes",
+    "source": "ICD-10-CM"
+  },
+  {
+    "code": "Z21",
+    "description": "Asymptomatic human immunodeficiency virus [HIV] infection status",
+    "chapter": "Factors influencing health status and contact with health services",
+    "source": "ICD-10-CM"
+  }
+]
