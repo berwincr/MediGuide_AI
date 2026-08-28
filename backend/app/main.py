@@ -1,6 +1,7 @@
 from bson import ObjectId
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import medicines_collection, icd10_collection, users_collection
+from app.gemini_service import explain_medicine
 from app.models.medicine import Medicine
 from app.models.user import UserCreate
 from app.models.auth import UserLogin
@@ -11,8 +12,9 @@ from app.security import (
     create_access_token,
     decode_access_token
 )
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Query, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
 
 app = FastAPI(
     title="MediGuide AI API"
@@ -357,6 +359,65 @@ def get_condition_details(code: str):
         "chapter": condition.get("chapter"),
         "source": condition.get("source")
     }
+
+# --------------------------------------------------
+# AI MEDICINE EXPLANATION
+# --------------------------------------------------
+
+@app.get("/medicine-ai-explanation/{rx_cui}")
+def get_ai_medicine_explanation(
+    rx_cui: str,
+    language: str = Query(
+        default="en",
+        pattern="^(en|ta)$",
+        description="Language: en for English, ta for Tamil"
+    )
+):
+
+    # Find medicine in MongoDB
+    medicine = medicines_collection.find_one(
+        {
+            "rx_cui": rx_cui
+        },
+        {
+            "_id": 0
+        }
+    )
+
+    if not medicine:
+        raise HTTPException(
+            status_code=404,
+            detail="Medicine not found"
+        )
+
+    try:
+
+        explanation = explain_medicine(
+            medicine_name=medicine.get("name"),
+            medicine_data=medicine,
+            language=language
+        )
+
+        return {
+            "rx_cui": rx_cui,
+            "medicine_name": medicine.get("name"),
+            "language": language,
+            "ai_explanation": explanation,
+            "disclaimer": (
+                "This information is for educational purposes only "
+                "and is not a substitute for professional medical advice."
+            )
+        }
+
+    except Exception as error:
+
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "AI service temporarily unavailable. "
+                "Please try again later."
+            )
+        )
 
 # --------------------------------------------------
 # REGISTER USER

@@ -14,3 +14,5 @@ class UserResponse(BaseModel):
     email: str
     language: str = "en"
     created_at: datetime
+
+   
