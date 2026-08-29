@@ -1,7 +1,11 @@
 from bson import ObjectId
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import medicines_collection, icd10_collection, users_collection
-from app.gemini_service import explain_medicine
+from app.gemini_service import (
+    explain_medicine,
+    explain_condition,
+    chat_with_ai
+)
 from app.models.medicine import Medicine
 from app.models.user import UserCreate
 from app.models.auth import UserLogin
@@ -14,8 +18,7 @@ from app.security import (
 )
 from fastapi import FastAPI, HTTPException, Query, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-
-
+from app.models.chat import ChatRequest
 app = FastAPI(
     title="MediGuide AI API"
 )
@@ -23,7 +26,8 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173"
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -276,13 +280,21 @@ def icd10_count():
 @app.get("/icd10/search/{query}")
 def search_icd10(query: str):
 
+    query = query.strip()
+
+    if not query:
+        raise HTTPException(
+            status_code=400,
+            detail="Please enter a condition name or ICD-10 code"
+        )
+
     conditions = list(
         icd10_collection.find(
             {
                 "$or": [
                     {
                         "code": {
-                            "$regex": query,
+                            "$regex": f"^{query}",
                             "$options": "i"
                         }
                     },
@@ -309,7 +321,6 @@ def search_icd10(query: str):
         "count": len(conditions),
         "results": conditions
     }
-
 # --------------------------------------------------
 # GET ICD-10 BY CODE
 # --------------------------------------------------
@@ -420,6 +431,101 @@ def get_ai_medicine_explanation(
         )
 
 # --------------------------------------------------
+# AI CONDITION EXPLANATION
+# --------------------------------------------------
+
+@app.get("/condition-ai-explanation/{code}")
+def get_ai_condition_explanation(
+    code: str,
+    language: str = Query(
+        default="en",
+        pattern="^(en|ta)$",
+        description="Language: en for English, ta for Tamil"
+    )
+):
+
+    # Find condition in MongoDB
+    condition = icd10_collection.find_one(
+        {
+            "code": code.upper()
+        },
+        {
+            "_id": 0
+        }
+    )
+
+    if not condition:
+        raise HTTPException(
+            status_code=404,
+            detail="Condition not found"
+        )
+
+    try:
+
+        explanation = explain_condition(
+            condition_code=condition.get("code"),
+            condition_data=condition,
+            language=language
+        )
+
+        return {
+            "code": condition.get("code"),
+            "condition_name": condition.get("description"),
+            "language": language,
+            "ai_explanation": explanation,
+            "disclaimer": (
+                "This information is for educational purposes only "
+                "and is not a substitute for professional medical advice."
+            )
+        }
+
+    except Exception as error:
+
+        print("Condition AI error:", error)
+
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "AI service temporarily unavailable. "
+                "Please try again later."
+            )
+        )
+    
+ 
+# --------------------------------------------------
+# AI CHAT ASSISTANT
+# --------------------------------------------------
+# --------------------------------------------------
+# AI CHAT ASSISTANT
+# --------------------------------------------------
+
+@app.post("/ai-chat")
+def ai_chat(request: ChatRequest):
+
+    try:
+        response = chat_with_ai(
+            message=request.message,
+            language=request.language
+        )
+
+        return {
+            "response": response,
+            "language": request.language
+        }
+
+    except Exception as error:
+
+        print("AI Chat Error:", error)
+
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "AI service temporarily unavailable. "
+                "Please try again later."
+            )
+        )
+    
+# --------------------------------------------------
 # REGISTER USER
 # --------------------------------------------------
 
@@ -519,9 +625,6 @@ def get_current_user(
 
     return payload
 
-# --------------------------------------------------
-# GET CURRENT USER
-# --------------------------------------------------
 
 # --------------------------------------------------
 # GET CURRENT USER
@@ -573,3 +676,4 @@ def get_current_user_info(
             "created_at": existing_user.get("created_at")
         }
     }
+
