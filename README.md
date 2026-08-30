@@ -189,5 +189,5 @@ The application does not:
 - Provide personalized treatment plans
 - Replace professional medical advice
 
-** If you are experiencing a medical emergency, seek immediate medical assistance or contact your local emergency services. ** 
+ > **If you are experiencing a medical emergency, seek immediate medical assistance or contact your local emergency services.** 
 
