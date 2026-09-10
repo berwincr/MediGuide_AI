@@ -10,6 +10,26 @@ import {
   AlertCircle,
 } from "lucide-react";
 
+function urlBase64ToUint8Array(base64String) {
+  const padding =
+    "=".repeat(
+      (4 - (base64String.length % 4)) % 4
+    );
+
+  const base64 =
+    (base64String + padding)
+      .replace(/-/g, "+")
+      .replace(/_/g, "/");
+
+  const rawData = window.atob(base64);
+
+  return Uint8Array.from(
+    [...rawData].map((char) =>
+      char.charCodeAt(0)
+    )
+  );
+}
+
 function Login() {
   const navigate = useNavigate();
 
@@ -20,56 +40,118 @@ function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
+const handleLogin = async (e) => {
+  e.preventDefault();
 
-    try {
-      setLoading(true);
-      setError("");
+  try {
+    setLoading(true);
+    setError("");
 
-      const response = await fetch(
-        "http://127.0.0.1:8000/users/login",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            email,
-            password,
-          }),
-        }
+    const response = await fetch(
+      "http://127.0.0.1:8000/users/login",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          password,
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.detail || "Unable to login. Please try again."
       );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.detail || "Unable to login. Please try again."
-        );
-      }
-
-      // Save JWT token
-      localStorage.setItem("token", data.access_token);
-
-      // Save user information if returned by backend
-      if (data.user) {
-        localStorage.setItem(
-          "user",
-          JSON.stringify(data.user)
-        );
-      }
-
-      // Go to dashboard after login
-      navigate("/dashboard");
-
-    } catch (err) {
-      console.error("Login error:", err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
     }
-  };
+
+    // Save JWT token
+    localStorage.setItem("token", data.access_token);
+
+    // Save user information if returned by backend
+    if (data.user) {
+      localStorage.setItem(
+        "user",
+        JSON.stringify(data.user)
+      );
+    }
+
+    // Create Web Push subscription
+    if (
+      "serviceWorker" in navigator &&
+      "PushManager" in window
+    ) {
+      try {
+        const registration =
+          await navigator.serviceWorker.ready;
+
+        let subscription =
+          await registration.pushManager.getSubscription();
+
+        if (!subscription) {
+          const permission =
+            await Notification.requestPermission();
+
+          if (permission === "granted") {
+            subscription =
+              await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey:
+                  urlBase64ToUint8Array(
+                    import.meta.env.VITE_VAPID_PUBLIC_KEY
+                  ),
+              });
+          }
+        }
+
+        if (subscription) {
+          const subscriptionJSON =
+            subscription.toJSON();
+
+          await fetch(
+            "http://127.0.0.1:8000/push/subscribe",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${data.access_token}`,
+              },
+              body: JSON.stringify({
+                endpoint: subscriptionJSON.endpoint,
+                p256dh:
+                  subscriptionJSON.keys.p256dh,
+                auth:
+                  subscriptionJSON.keys.auth,
+              }),
+            }
+          );
+
+          console.log(
+            "Push subscription saved"
+          );
+        }
+      } catch (pushError) {
+        console.error(
+          "Push subscription failed:",
+          pushError
+        );
+      }
+    }
+
+    // Go to dashboard
+    navigate("/dashboard");
+
+  } catch (err) {
+    console.error("Login error:", err);
+    setError(err.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div

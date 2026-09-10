@@ -10,6 +10,8 @@ import ConditionDetails from "./pages/ConditionDetails";
 import AppLayout from "./components/AppLayout";
 import MedicineDetails from "./pages/MedicineDetails";
 import AIChat from "./pages/AIChat";
+import OCR from "./pages/OCR";
+import Reminder from "./pages/Reminder";
 
 
 function App() {
@@ -19,15 +21,6 @@ function App() {
         <Route path="/" element={<Login />} />
 
         <Route path="/register" element={<Register />} />
-
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          }
-        />
 
         <Route
   path="/dashboard"
@@ -83,6 +76,28 @@ function App() {
   }
 />
 <Route path="/ai-chat" element={<AIChat />} />
+
+<Route
+  path="/ocr"
+  element={
+    <ProtectedRoute>
+      <AppLayout>
+        <OCR />
+      </AppLayout>
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path="/reminders"
+  element={
+    <ProtectedRoute>
+      <AppLayout>
+        <Reminder />
+      </AppLayout>
+    </ProtectedRoute>
+  }
+/>
 
 
       </Routes>

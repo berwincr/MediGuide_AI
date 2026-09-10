@@ -39,3 +39,8 @@ Thumbs.db
 # MediGuide datasets
 data-pipeline/raw/
 data-pipeline/processed/
+
+# Google Cloud credentials
+*-credentials.json
+service-account*.json
+mediguide-ocr-key.json

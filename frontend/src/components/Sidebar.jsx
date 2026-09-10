@@ -18,36 +18,34 @@ function Sidebar() {
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
 
-  const menuItems = [
-    {
-      name: "Dashboard",
-      icon: LayoutDashboard,
-      path: "/dashboard",
-    },
-    {
-      name: "Medicines",
-      icon: Pill,
-      path: "/medicines",
-    },
-    {
-      name: "Conditions",
-      icon: HeartPulse,
-      path: "/conditions",
-    },
-  ];
+const menuItems = [
+  {
+    name: "Dashboard",
+    icon: LayoutDashboard,
+    path: "/dashboard",
+  },
+  {
+    name: "Medicines",
+    icon: Pill,
+    path: "/medicines",
+  },
+  {
+    name: "Conditions",
+    icon: HeartPulse,
+    path: "/conditions",
+  },
+  {
+    name: "Prescription Scan",
+    icon: ScanLine,
+    path: "/ocr",
+  },
 
-  const upcomingItems = [
-    {
-      name: "Prescription Scan",
-      icon: ScanLine,
-      disabled: true,
-    },
-    {
-      name: "Reminders",
-      icon: Bell,
-      disabled: true,
-    },
-  ];
+  { name: "Reminders", 
+    icon: Bell, 
+    path: "/reminders" },
+];
+
+const upcomingItems = [];
 
   const handleLogout = () => {
     localStorage.removeItem("token");

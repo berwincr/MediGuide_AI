@@ -57,27 +57,24 @@ function Dashboard() {
       background: "#eef2ff",
     },
     {
-      title: "Prescription Scanner",
-      description:
-        "Upload a prescription image and let MediGuide AI identify medicines using OCR technology.",
-      icon: <ScanLine size={28} />,
-      action: "Coming Soon",
-      path: "/prescription-scanner",
-      color: "#7c3aed",
-      background: "#f3e8ff",
-      comingSoon: true,
-    },
-    {
-      title: "Medication Reminders",
-      description:
-        "Set reminders for your medicines and stay organized with your medication schedule.",
-      icon: <Bell size={28} />,
-      action: "Coming Soon",
-      path: "/reminders",
-      color: "#ea580c",
-      background: "#fff7ed",
-      comingSoon: true,
-    },
+  title: "Prescription Scanner",
+  description:
+    "Upload a prescription image and let MediGuide AI identify possible medicines using OCR technology.",
+  icon: <ScanLine size={28} />,
+  action: "Scan Prescription",
+  path: "/ocr",
+  color: "#7c3aed",
+  background: "#f3e8ff",
+},
+   {
+  title: "Medicine Reminders",
+  description: "Schedule and manage your medicine reminders.",
+  icon: <Bell size={28} />,
+  action: "Manage Reminders",
+  path: "/reminders",
+  color: "#7c3aed",
+  background: "#f3e8ff",
+},
   ];
 
   return (
@@ -485,19 +482,19 @@ function Dashboard() {
             />
 
             <QuickAction
-              icon={<ScanLine size={20} />}
-              title="Scan Prescription"
-              description="OCR medicine detection"
-              color="#7c3aed"
-              comingSoon
-            />
+  icon={<ScanLine size={20} />}
+  title="Scan Prescription"
+  description="OCR medicine detection"
+  color="#7c3aed"
+  onClick={() => navigate("/ocr")}
+/>
 
             <QuickAction
               icon={<Clock size={20} />}
               title="Set Reminder"
               description="Manage medication schedules"
               color="#ea580c"
-              comingSoon
+              onClick={() => navigate("/reminders")}
             />
            
           </div>

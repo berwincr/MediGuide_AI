@@ -1,27 +1,90 @@
-from bson import ObjectId
+import os
+import shutil
+
+from datetime import datetime
+
+from fastapi import (
+    FastAPI,
+    HTTPException,
+    UploadFile,
+    File,
+    Depends,
+    Query
+)
+
 from fastapi.middleware.cors import CORSMiddleware
-from app.database import medicines_collection, icd10_collection, users_collection
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+from bson import ObjectId
+
+from app.database import (
+    medicines_collection,
+    icd10_collection,
+    users_collection,
+    reminders_collection
+)
+
+from app.services.ocr_service import extract_text
+
+from app.services.medicine_extractor import (
+    extract_medicine_candidates,
+    normalize_medicine_name
+)
+
+from app.services.push_service import send_push_notification
+
+from app.services.scheduler import (
+    start_scheduler,
+    stop_scheduler
+)
+
 from app.gemini_service import (
     explain_medicine,
     explain_condition,
     chat_with_ai
 )
+
 from app.models.medicine import Medicine
 from app.models.user import UserCreate
 from app.models.auth import UserLogin
-from datetime import datetime
+from app.models.chat import ChatRequest
+from app.models.reminder import (
+    ReminderRequest,
+    PushSubscription
+)
+
 from app.security import (
     hash_password,
     verify_password,
     create_access_token,
     decode_access_token
 )
-from fastapi import FastAPI, HTTPException, Query, Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from app.models.chat import ChatRequest
+
+
 app = FastAPI(
     title="MediGuide AI API"
 )
+
+
+# ==================================================
+# SCHEDULER STARTUP / SHUTDOWN
+# ==================================================
+
+@app.on_event("startup")
+def startup_event():
+    print("STARTING MEDICINE REMINDER SCHEDULER")
+    start_scheduler()
+
+
+@app.on_event("shutdown")
+def shutdown_event():
+    print("STOPPING MEDICINE REMINDER SCHEDULER")
+    stop_scheduler()
+
+
+# ==================================================
+# CORS
+# ==================================================
 
 app.add_middleware(
     CORSMiddleware,
@@ -34,6 +97,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# ==================================================
+# HOME
+# ==================================================
+
 @app.get("/")
 def home():
     return {
@@ -41,9 +109,9 @@ def home():
     }
 
 
-# --------------------------------------------------
-# HEALTH CHECK
-# --------------------------------------------------
+# ==================================================
+# MEDICINE HEALTH CHECK
+# ==================================================
 
 @app.get("/medicines/count")
 def medicine_count():
@@ -55,9 +123,9 @@ def medicine_count():
     }
 
 
-# --------------------------------------------------
+# ==================================================
 # SEARCH MEDICINES
-# --------------------------------------------------
+# ==================================================
 
 @app.get("/medicines/search/{name}")
 def search_medicine(name: str):
@@ -87,10 +155,13 @@ def search_medicine(name: str):
     }
 
 
+# ==================================================
+# UNIFIED SEARCH
+# ==================================================
+
 @app.get("/search/{query}")
 def unified_search(query: str):
 
-    # Search medicines
     medicines = list(
         medicines_collection.find(
             {
@@ -108,7 +179,6 @@ def unified_search(query: str):
         ).limit(10)
     )
 
-    # Search ICD-10 conditions
     conditions = list(
         icd10_collection.find(
             {
@@ -143,9 +213,9 @@ def unified_search(query: str):
     }
 
 
-# --------------------------------------------------
-# GET CLEAN MEDICINE DETAILS
-# --------------------------------------------------
+# ==================================================
+# CLEAN MEDICINE DETAILS
+# ==================================================
 
 @app.get("/medicine-details/{rx_cui}")
 def get_medicine_details(rx_cui: str):
@@ -161,7 +231,11 @@ def get_medicine_details(rx_cui: str):
             detail="Medicine not found"
         )
 
-    medlineplus_entries = medicine.get("medlineplus", {}).get("entries", [])
+    medlineplus_entries = (
+        medicine
+        .get("medlineplus", {})
+        .get("entries", [])
+    )
 
     return {
         "rx_cui": medicine.get("rx_cui"),
@@ -177,9 +251,11 @@ def get_medicine_details(rx_cui: str):
             for entry in medlineplus_entries
         ]
     }
-# --------------------------------------------------
+
+
+# ==================================================
 # GET MEDICINE BY RxCUI
-# --------------------------------------------------
+# ==================================================
 
 @app.get("/medicines/{rx_cui}")
 def get_medicine(rx_cui: str):
@@ -194,7 +270,6 @@ def get_medicine(rx_cui: str):
     )
 
     if not medicine:
-
         raise HTTPException(
             status_code=404,
             detail="Medicine not found"
@@ -203,9 +278,9 @@ def get_medicine(rx_cui: str):
     return medicine
 
 
-# --------------------------------------------------
+# ==================================================
 # GET ALL MEDICINES
-# --------------------------------------------------
+# ==================================================
 
 @app.get("/medicines")
 def get_medicines():
@@ -228,9 +303,9 @@ def get_medicines():
     }
 
 
-# --------------------------------------------------
+# ==================================================
 # ADD CUSTOM MEDICINE
-# --------------------------------------------------
+# ==================================================
 
 @app.post("/medicines")
 def add_medicine(medicine: Medicine):
@@ -245,7 +320,6 @@ def add_medicine(medicine: Medicine):
     )
 
     if existing_medicine:
-
         raise HTTPException(
             status_code=400,
             detail="Medicine already exists"
@@ -260,9 +334,10 @@ def add_medicine(medicine: Medicine):
         "id": str(result.inserted_id)
     }
 
-# --------------------------------------------------
+
+# ==================================================
 # ICD-10 HEALTH CHECK
-# --------------------------------------------------
+# ==================================================
 
 @app.get("/icd10/count")
 def icd10_count():
@@ -273,9 +348,10 @@ def icd10_count():
         "total_documents": total
     }
 
-# --------------------------------------------------
+
+# ==================================================
 # SEARCH ICD-10 CONDITIONS
-# --------------------------------------------------
+# ==================================================
 
 @app.get("/icd10/search/{query}")
 def search_icd10(query: str):
@@ -321,9 +397,11 @@ def search_icd10(query: str):
         "count": len(conditions),
         "results": conditions
     }
-# --------------------------------------------------
+
+
+# ==================================================
 # GET ICD-10 BY CODE
-# --------------------------------------------------
+# ==================================================
 
 @app.get("/icd10/{code}")
 def get_icd10(code: str):
@@ -338,7 +416,6 @@ def get_icd10(code: str):
     )
 
     if not condition:
-
         raise HTTPException(
             status_code=404,
             detail="ICD-10 condition not found"
@@ -346,16 +423,21 @@ def get_icd10(code: str):
 
     return condition
 
-# --------------------------------------------------
-# GET CLEAN ICD-10 CONDITION DETAILS
-# --------------------------------------------------
+
+# ==================================================
+# CLEAN ICD-10 CONDITION DETAILS
+# ==================================================
 
 @app.get("/condition-details/{code}")
 def get_condition_details(code: str):
 
     condition = icd10_collection.find_one(
-        {"code": code.upper()},
-        {"_id": 0}
+        {
+            "code": code.upper()
+        },
+        {
+            "_id": 0
+        }
     )
 
     if not condition:
@@ -371,9 +453,10 @@ def get_condition_details(code: str):
         "source": condition.get("source")
     }
 
-# --------------------------------------------------
+
+# ==================================================
 # AI MEDICINE EXPLANATION
-# --------------------------------------------------
+# ==================================================
 
 @app.get("/medicine-ai-explanation/{rx_cui}")
 def get_ai_medicine_explanation(
@@ -385,7 +468,6 @@ def get_ai_medicine_explanation(
     )
 ):
 
-    # Find medicine in MongoDB
     medicine = medicines_collection.find_one(
         {
             "rx_cui": rx_cui
@@ -422,6 +504,8 @@ def get_ai_medicine_explanation(
 
     except Exception as error:
 
+        print("Medicine AI error:", error)
+
         raise HTTPException(
             status_code=503,
             detail=(
@@ -430,9 +514,10 @@ def get_ai_medicine_explanation(
             )
         )
 
-# --------------------------------------------------
+
+# ==================================================
 # AI CONDITION EXPLANATION
-# --------------------------------------------------
+# ==================================================
 
 @app.get("/condition-ai-explanation/{code}")
 def get_ai_condition_explanation(
@@ -444,7 +529,6 @@ def get_ai_condition_explanation(
     )
 ):
 
-    # Find condition in MongoDB
     condition = icd10_collection.find_one(
         {
             "code": code.upper()
@@ -490,19 +574,17 @@ def get_ai_condition_explanation(
                 "Please try again later."
             )
         )
-    
- 
-# --------------------------------------------------
+
+
+# ==================================================
 # AI CHAT ASSISTANT
-# --------------------------------------------------
-# --------------------------------------------------
-# AI CHAT ASSISTANT
-# --------------------------------------------------
+# ==================================================
 
 @app.post("/ai-chat")
 def ai_chat(request: ChatRequest):
 
     try:
+
         response = chat_with_ai(
             message=request.message,
             language=request.language
@@ -524,15 +606,15 @@ def ai_chat(request: ChatRequest):
                 "Please try again later."
             )
         )
-    
-# --------------------------------------------------
+
+
+# ==================================================
 # REGISTER USER
-# --------------------------------------------------
+# ==================================================
 
 @app.post("/users/register")
 def register_user(user: UserCreate):
 
-    # Check whether email already exists
     existing_user = users_collection.find_one(
         {
             "email": user.email.lower()
@@ -545,7 +627,6 @@ def register_user(user: UserCreate):
             detail="User with this email already exists"
         )
 
-    # Create user document
     new_user = {
         "name": user.name,
         "email": user.email.lower(),
@@ -554,31 +635,35 @@ def register_user(user: UserCreate):
         "created_at": datetime.utcnow()
     }
 
-    result = users_collection.insert_one(new_user)
+    result = users_collection.insert_one(
+        new_user
+    )
 
     return {
         "message": "User registered successfully",
         "user_id": str(result.inserted_id)
     }
 
+
+# ==================================================
+# LOGIN USER
+# ==================================================
+
 @app.post("/users/login")
 def login_user(user: UserLogin):
 
-    # Find user by email
     existing_user = users_collection.find_one(
         {
             "email": user.email.lower()
         }
     )
 
-    # Check whether user exists
     if not existing_user:
         raise HTTPException(
             status_code=401,
             detail="Invalid email or password"
         )
 
-    # Verify password
     if not verify_password(
         user.password,
         existing_user["password"]
@@ -588,7 +673,6 @@ def login_user(user: UserLogin):
             detail="Invalid email or password"
         )
 
-    # Create JWT token
     access_token = create_access_token(
         {
             "sub": str(existing_user["_id"]),
@@ -602,9 +686,10 @@ def login_user(user: UserLogin):
         "token_type": "bearer"
     }
 
-# --------------------------------------------------
+
+# ==================================================
 # JWT AUTHENTICATION
-# --------------------------------------------------
+# ==================================================
 
 security = HTTPBearer()
 
@@ -626,9 +711,9 @@ def get_current_user(
     return payload
 
 
-# --------------------------------------------------
+# ==================================================
 # GET CURRENT USER
-# --------------------------------------------------
+# ==================================================
 
 @app.get("/users/me")
 def get_current_user_info(
@@ -644,8 +729,11 @@ def get_current_user_info(
         )
 
     try:
+
         object_id = ObjectId(user_id)
+
     except Exception:
+
         raise HTTPException(
             status_code=401,
             detail="Invalid user ID"
@@ -677,3 +765,256 @@ def get_current_user_info(
         }
     }
 
+
+# ==================================================
+# OCR PRESCRIPTION
+# ==================================================
+
+@app.post("/ocr")
+async def ocr(
+    file: UploadFile = File(...)
+):
+
+    os.makedirs(
+        "uploads",
+        exist_ok=True
+    )
+
+    file_path = os.path.join(
+        "uploads",
+        file.filename
+    )
+
+    with open(
+        file_path,
+        "wb"
+    ) as buffer:
+
+        shutil.copyfileobj(
+            file.file,
+            buffer
+        )
+
+    text = extract_text(
+        file_path
+    )
+
+    candidates = extract_medicine_candidates(
+        text
+    )
+
+    medicines = []
+
+    for candidate in candidates:
+
+        generic_name = normalize_medicine_name(
+            candidate
+        )
+
+        results = list(
+            medicines_collection.find(
+                {
+                    "name": {
+                        "$regex": generic_name,
+                        "$options": "i"
+                    }
+                },
+                {
+                    "_id": 0,
+                    "rx_cui": 1,
+                    "name": 1,
+                    "term_type": 1,
+                    "source": 1
+                }
+            ).limit(5)
+        )
+
+        medicines.append(
+            {
+                "ocr_name": candidate,
+                "possible_generic": generic_name,
+                "matches": results
+            }
+        )
+
+    os.remove(file_path)
+
+    return {
+        "filename": file.filename,
+        "text": text,
+        "medicines": medicines
+    }
+
+
+# ==================================================
+# CREATE REMINDER
+# ==================================================
+
+@app.post("/reminders")
+def create_reminder(
+    reminder: ReminderRequest,
+    current_user=Depends(get_current_user)
+):
+
+    reminder_data = reminder.model_dump()
+
+    reminder_data["user_id"] = current_user["sub"]
+
+    reminder_data["active"] = True
+
+    result = reminders_collection.insert_one(
+        reminder_data
+    )
+
+    return {
+        "message": "Reminder created successfully",
+        "reminder_id": str(result.inserted_id)
+    }
+
+
+# ==================================================
+# GET REMINDERS
+# ==================================================
+
+@app.get("/reminders")
+def get_reminders(
+    current_user=Depends(get_current_user)
+):
+
+    reminders = list(
+        reminders_collection.find(
+            {
+                "user_id": current_user["sub"]
+            },
+            {
+                "_id": 1,
+                "medicine_name": 1,
+                "rx_cui": 1,
+                "dosage": 1,
+                "frequency": 1,
+                "time": 1,
+                "start_date": 1,
+                "end_date": 1,
+                "notes": 1,
+                "active": 1
+            }
+        )
+    )
+
+    for reminder in reminders:
+
+        reminder["_id"] = str(
+            reminder["_id"]
+        )
+
+    return reminders
+
+
+# ==================================================
+# DELETE REMINDER
+# ==================================================
+
+@app.delete("/reminders/{reminder_id}")
+def delete_reminder(
+    reminder_id: str,
+    current_user=Depends(get_current_user)
+):
+
+    result = reminders_collection.delete_one(
+        {
+            "_id": ObjectId(reminder_id),
+            "user_id": current_user["sub"]
+        }
+    )
+
+    if result.deleted_count == 0:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Reminder not found"
+        )
+
+    return {
+        "message": "Reminder deleted successfully"
+    }
+
+
+# ==================================================
+# SAVE PUSH SUBSCRIPTION
+# ==================================================
+
+@app.post("/push/subscribe")
+def save_push_subscription(
+    subscription: PushSubscription,
+    current_user=Depends(get_current_user)
+):
+
+    subscription_data = {
+        "endpoint": subscription.endpoint,
+        "keys": {
+            "p256dh": subscription.p256dh,
+            "auth": subscription.auth
+        }
+    }
+
+    users_collection.update_one(
+        {
+            "_id": ObjectId(
+                current_user["sub"]
+            )
+        },
+        {
+            "$set": {
+                "push_subscription": subscription_data
+            }
+        }
+    )
+
+    return {
+        "message": "Push subscription saved successfully"
+    }
+
+
+# ==================================================
+# TEST PUSH
+# ==================================================
+
+@app.post("/push/test")
+def test_push(
+    current_user=Depends(get_current_user)
+):
+
+    user = users_collection.find_one(
+        {
+            "_id": ObjectId(
+                current_user["sub"]
+            )
+        }
+    )
+
+    if not user or "push_subscription" not in user:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Push subscription not found"
+        )
+
+    success = send_push_notification(
+        subscription=user["push_subscription"],
+        title="MediGuide AI 💊",
+        body="Web Push notifications are working!",
+        data={
+            "type": "test"
+        }
+    )
+
+    if not success:
+
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to send push notification"
+        )
+
+    return {
+        "message": "Test push notification sent"
+    }

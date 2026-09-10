@@ -182,3 +182,91 @@
     border-right-color: var(--border);
   }
 }
+
+.ocr-page {
+  padding: 30px;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.ocr-header {
+  margin-bottom: 25px;
+}
+
+.ocr-header h1 {
+  margin-bottom: 8px;
+}
+
+.ocr-header p {
+  color: #666;
+}
+
+.ocr-upload-card {
+  padding: 25px;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  margin-bottom: 30px;
+}
+
+.ocr-upload-card input {
+  margin-bottom: 15px;
+}
+
+.ocr-upload-card button,
+.medicine-card button {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.ocr-upload-card button {
+  background: #0f8377;
+  color: white;
+}
+
+.ocr-upload-card button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.medicine-results {
+  display: grid;
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.medicine-card {
+  padding: 20px;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+}
+
+.medicine-card h3 {
+  margin-top: 0;
+}
+
+.medicine-card button {
+  background: #3467f0;
+  color: white;
+  margin-top: 8px;
+}
+
+.ocr-warning {
+  margin-top: 20px;
+  padding: 15px;
+  border-radius: 8px;
+  background: #fff8e1;
+}
+
+.ocr-text {
+  margin-top: 30px;
+  padding: 20px;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+}
+
+.ocr-text pre {
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
