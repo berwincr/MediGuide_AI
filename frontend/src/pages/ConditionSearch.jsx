@@ -9,6 +9,7 @@ import {
   Hash,
   ChevronRight,
   HeartPulse,
+  ChevronLeft,
 } from "lucide-react";
 
 function ConditionSearch() {
@@ -19,12 +20,20 @@ function ConditionSearch() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
-  const searchCondition = async (e) => {
-    e.preventDefault();
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalResults, setTotalResults] = useState(0);
+
+  const searchCondition = async (e, requestedPage = 1) => {
+    if (e) {
+      e.preventDefault();
+    }
 
     if (!searchTerm.trim()) {
       setMessage("Please enter a condition name or ICD-10 code.");
       setConditions([]);
+      setTotalResults(0);
+      setTotalPages(1);
       return;
     }
 
@@ -32,10 +41,12 @@ function ConditionSearch() {
       setLoading(true);
       setMessage("");
       setConditions([]);
-      
-const response = await fetch(
-  `http://127.0.0.1:8000/icd10/search/${encodeURIComponent(searchTerm.trim())}`
-);
+
+      const response = await fetch(
+        `http://127.0.0.1:8000/icd10/search/${encodeURIComponent(
+          searchTerm.trim()
+        )}?page=${requestedPage}&limit=20`
+      );
 
       const data = await response.json();
 
@@ -46,15 +57,37 @@ const response = await fetch(
 
       if (!data.results || data.results.length === 0) {
         setMessage(`No conditions found for "${searchTerm}".`);
+        setTotalResults(0);
+        setTotalPages(1);
         return;
       }
 
       setConditions(data.results);
+      setPage(data.page);
+      setTotalPages(data.total_pages);
+      setTotalResults(data.total);
     } catch (error) {
       console.error("Condition search error:", error);
       setMessage("Unable to connect to the server.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSearch = (e) => {
+    setPage(1);
+    searchCondition(e, 1);
+  };
+
+  const handlePrevious = () => {
+    if (page > 1) {
+      searchCondition(null, page - 1);
+    }
+  };
+
+  const handleNext = () => {
+    if (page < totalPages) {
+      searchCondition(null, page + 1);
     }
   };
 
@@ -178,7 +211,7 @@ const response = await fetch(
         </p>
 
         <form
-          onSubmit={searchCondition}
+          onSubmit={handleSearch}
           style={{
             display: "flex",
             gap: "12px",
@@ -296,7 +329,7 @@ const response = await fetch(
                 fontWeight: "600",
               }}
             >
-              {conditions.length} found
+              {totalResults} found
             </span>
           </div>
 
@@ -431,6 +464,81 @@ const response = await fetch(
               </div>
             ))}
           </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: "20px",
+                marginTop: "35px",
+              }}
+            >
+              <button
+                onClick={handlePrevious}
+                disabled={page === 1 || loading}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "7px",
+                  padding: "11px 18px",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "9px",
+                  backgroundColor:
+                    page === 1 || loading ? "#f1f5f9" : "white",
+                  color:
+                    page === 1 || loading ? "#94a3b8" : "#334155",
+                  cursor:
+                    page === 1 || loading ? "not-allowed" : "pointer",
+                  fontWeight: "600",
+                }}
+              >
+                <ChevronLeft size={18} />
+                Previous
+              </button>
+
+              <span
+                style={{
+                  color: "#475569",
+                  fontSize: "14px",
+                  fontWeight: "600",
+                }}
+              >
+                Page {page} of {totalPages}
+              </span>
+
+              <button
+                onClick={handleNext}
+                disabled={page === totalPages || loading}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "7px",
+                  padding: "11px 18px",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "9px",
+                  backgroundColor:
+                    page === totalPages || loading
+                      ? "#f1f5f9"
+                      : "white",
+                  color:
+                    page === totalPages || loading
+                      ? "#94a3b8"
+                      : "#334155",
+                  cursor:
+                    page === totalPages || loading
+                      ? "not-allowed"
+                      : "pointer",
+                  fontWeight: "600",
+                }}
+              >
+                Next
+                <ChevronRight size={18} />
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>

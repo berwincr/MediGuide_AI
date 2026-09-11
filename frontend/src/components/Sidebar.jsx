@@ -43,6 +43,7 @@ const menuItems = [
   { name: "Reminders", 
     icon: Bell, 
     path: "/reminders" },
+    
 ];
 
 const upcomingItems = [];

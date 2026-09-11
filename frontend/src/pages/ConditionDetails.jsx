@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import ReactMarkdown from "react-markdown";
 import {
   ArrowLeft,
   FileText,
@@ -20,7 +21,6 @@ function ConditionDetails() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // AI states
   const [aiExplanation, setAiExplanation] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState("en");
@@ -55,6 +55,7 @@ function ConditionDetails() {
         setCondition(data);
       } catch (err) {
         console.error("Condition fetch error:", err);
+
         setError(
           err.message || "Unable to connect to the server."
         );
@@ -91,7 +92,6 @@ function ConditionDetails() {
       }
 
       setAiExplanation(data.ai_explanation);
-
     } catch (err) {
       console.error(
         "Condition AI explanation error:",
@@ -740,10 +740,84 @@ function ConditionDetails() {
                 style={{
                   color: "#334155",
                   lineHeight: "1.8",
-                  whiteSpace: "pre-wrap",
+                  fontSize: "15px",
                 }}
               >
-                {aiExplanation}
+                <ReactMarkdown
+                  components={{
+                    h3: ({ children }) => (
+                      <h3
+                        style={{
+                          fontSize: "19px",
+                          fontWeight: "700",
+                          color: "#0F8377",
+                          marginTop: "24px",
+                          marginBottom: "10px",
+                        }}
+                      >
+                        {children}
+                      </h3>
+                    ),
+
+                    p: ({ children }) => (
+                      <p
+                        style={{
+                          marginTop: "0",
+                          marginBottom: "14px",
+                        }}
+                      >
+                        {children}
+                      </p>
+                    ),
+
+                    ul: ({ children }) => (
+                      <ul
+                        style={{
+                          paddingLeft: "24px",
+                          marginTop: "8px",
+                          marginBottom: "16px",
+                        }}
+                      >
+                        {children}
+                      </ul>
+                    ),
+
+                    ol: ({ children }) => (
+                      <ol
+                        style={{
+                          paddingLeft: "24px",
+                          marginTop: "8px",
+                          marginBottom: "16px",
+                        }}
+                      >
+                        {children}
+                      </ol>
+                    ),
+
+                    li: ({ children }) => (
+                      <li
+                        style={{
+                          marginBottom: "7px",
+                        }}
+                      >
+                        {children}
+                      </li>
+                    ),
+
+                    strong: ({ children }) => (
+                      <strong
+                        style={{
+                          fontWeight: "700",
+                          color: "#1e293b",
+                        }}
+                      >
+                        {children}
+                      </strong>
+                    ),
+                  }}
+                >
+                  {aiExplanation}
+                </ReactMarkdown>
               </div>
             </div>
           )}

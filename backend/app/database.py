@@ -14,5 +14,14 @@ db = client["mediguide"]
 medicines_collection = db["medicines_enriched"]
 icd10_collection = db["icd10_conditions"]
 users_collection = db["users"]
-icd10_collection = db["icd10_conditions"]
 reminders_collection = db["reminders"]
+chat_sessions_collection = db["chat_sessions"]
+chat_messages_collection = db["chat_messages"]
+
+chat_sessions_collection.create_index(
+    [("user_id", 1), ("updated_at", -1)]
+)
+
+chat_messages_collection.create_index(
+    [("session_id", 1), ("timestamp", 1)]
+)

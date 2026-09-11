@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import ReactMarkdown from "react-markdown";
 import {
   ArrowLeft,
   Send,
@@ -43,7 +44,6 @@ function AIChat() {
 
     if (!trimmedQuestion || loading) return;
 
-    // Add user's message to chat
     const userMessage = {
       role: "user",
       content: trimmedQuestion,
@@ -58,7 +58,6 @@ function AIChat() {
     setLoading(true);
 
     try {
-      // Connect to FastAPI backend
       const response = await fetch(
         "http://127.0.0.1:8000/ai-chat",
         {
@@ -73,17 +72,14 @@ function AIChat() {
         }
       );
 
-      // Read backend response
       const data = await response.json();
 
-      // Handle backend errors
       if (!response.ok) {
         throw new Error(
           data.detail || "Unable to get AI response."
         );
       }
 
-      // Add Gemini AI response
       const aiMessage = {
         role: "assistant",
         content:
@@ -95,11 +91,9 @@ function AIChat() {
         ...previousMessages,
         aiMessage,
       ]);
-
     } catch (error) {
       console.error("AI chat error:", error);
 
-      // Display error in chat
       setMessages((previousMessages) => [
         ...previousMessages,
         {
@@ -547,13 +541,92 @@ function AIChat() {
                             : "1px solid #e2e8f0",
                           lineHeight: "1.7",
                           fontSize: "14px",
-                          whiteSpace: "pre-wrap",
                           boxShadow: isUser
                             ? "none"
                             : "0 3px 10px rgba(15,23,42,0.04)",
                         }}
                       >
-                        {message.content}
+                        {isUser ? (
+                          message.content
+                        ) : (
+                          <ReactMarkdown
+                            components={{
+                              h3: ({ children }) => (
+                                <h3
+                                  style={{
+                                    fontSize: "18px",
+                                    fontWeight: "700",
+                                    color: "#0F8377",
+                                    marginTop: "18px",
+                                    marginBottom: "9px",
+                                  }}
+                                >
+                                  {children}
+                                </h3>
+                              ),
+
+                              p: ({ children }) => (
+                                <p
+                                  style={{
+                                    marginTop: "0",
+                                    marginBottom: "12px",
+                                    lineHeight: "1.7",
+                                  }}
+                                >
+                                  {children}
+                                </p>
+                              ),
+
+                              ul: ({ children }) => (
+                                <ul
+                                  style={{
+                                    paddingLeft: "22px",
+                                    marginTop: "8px",
+                                    marginBottom: "14px",
+                                  }}
+                                >
+                                  {children}
+                                </ul>
+                              ),
+
+                              ol: ({ children }) => (
+                                <ol
+                                  style={{
+                                    paddingLeft: "22px",
+                                    marginTop: "8px",
+                                    marginBottom: "14px",
+                                  }}
+                                >
+                                  {children}
+                                </ol>
+                              ),
+
+                              li: ({ children }) => (
+                                <li
+                                  style={{
+                                    marginBottom: "6px",
+                                    lineHeight: "1.6",
+                                  }}
+                                >
+                                  {children}
+                                </li>
+                              ),
+
+                              strong: ({ children }) => (
+                                <strong
+                                  style={{
+                                    fontWeight: "700",
+                                    color: "#1e293b",
+                                  }}
+                                >
+                                  {children}
+                                </strong>
+                              ),
+                            }}
+                          >
+                            {message.content}
+                          </ReactMarkdown>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -600,8 +673,7 @@ function AIChat() {
                     <LoaderCircle
                       size={17}
                       style={{
-                        animation:
-                          "spin 1s linear infinite",
+                        animation: "spin 1s linear infinite",
                       }}
                     />
                     MediGuide AI is thinking...

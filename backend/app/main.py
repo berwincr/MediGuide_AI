@@ -1,7 +1,7 @@
 import os
 import shutil
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import (
     FastAPI,
@@ -15,13 +15,14 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
-from bson import ObjectId
 
 from app.database import (
     medicines_collection,
     icd10_collection,
     users_collection,
-    reminders_collection
+    reminders_collection,
+    chat_sessions_collection,
+    chat_messages_collection
 )
 
 from app.services.ocr_service import extract_text
@@ -47,7 +48,7 @@ from app.gemini_service import (
 from app.models.medicine import Medicine
 from app.models.user import UserCreate
 from app.models.auth import UserLogin
-from app.models.chat import ChatRequest
+from app.models.chat import ChatRequest, ChatSessionCreate
 from app.models.reminder import (
     ReminderRequest,
     PushSubscription
@@ -352,9 +353,12 @@ def icd10_count():
 # ==================================================
 # SEARCH ICD-10 CONDITIONS
 # ==================================================
-
 @app.get("/icd10/search/{query}")
-def search_icd10(query: str):
+def search_icd10(
+    query: str,
+    page: int = 1,
+    limit: int = 20
+):
 
     query = query.strip()
 
@@ -363,6 +367,20 @@ def search_icd10(query: str):
             status_code=400,
             detail="Please enter a condition name or ICD-10 code"
         )
+
+    if page < 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Page must be greater than 0"
+        )
+
+    if limit < 1 or limit > 100:
+        raise HTTPException(
+            status_code=400,
+            detail="Limit must be between 1 and 100"
+        )
+
+    query_lower = query.lower()
 
     conditions = list(
         icd10_collection.find(
@@ -389,16 +407,34 @@ def search_icd10(query: str):
                 "chapter": 1,
                 "source": 1
             }
-        ).limit(20)
+        )
     )
+
+    conditions.sort(
+        key=lambda x: (
+            not x["description"].lower().startswith(query_lower),
+            len(x["code"])
+        )
+    )
+
+    total = len(conditions)
+
+    start = (page - 1) * limit
+    end = start + limit
+
+    paginated_results = conditions[start:end]
+
+    total_pages = (total + limit - 1) // limit
 
     return {
         "query": query,
-        "count": len(conditions),
-        "results": conditions
+        "count": len(paginated_results),
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "total_pages": total_pages,
+        "results": paginated_results
     }
-
-
 # ==================================================
 # GET ICD-10 BY CODE
 # ==================================================
@@ -1017,4 +1053,165 @@ def test_push(
 
     return {
         "message": "Test push notification sent"
+    }
+
+
+# --------------------------------------------------
+# CHAT SESSIONS
+# --------------------------------------------------
+
+@app.post("/chat/sessions")
+def create_chat_session(
+    session: ChatSessionCreate,
+    current_user=Depends(get_current_user)
+):
+    now = datetime.now(timezone.utc)
+
+    title = session.title.strip() if session.title else "New Chat"
+
+    session_data = {
+        "user_id": current_user["sub"],
+        "title": title,
+        "created_at": now,
+        "updated_at": now
+    }
+
+    result = chat_sessions_collection.insert_one(session_data)
+
+    return {
+        "session_id": str(result.inserted_id),
+        "title": title,
+        "created_at": now,
+        "updated_at": now
+    }
+
+
+@app.get("/chat/sessions")
+def get_chat_sessions(
+    current_user=Depends(get_current_user)
+):
+    sessions = list(
+        chat_sessions_collection.find(
+            {
+                "user_id": current_user["sub"]
+            },
+            {
+                "_id": 1,
+                "title": 1,
+                "created_at": 1,
+                "updated_at": 1
+            }
+        ).sort("updated_at", -1)
+    )
+
+    result = []
+
+    for session in sessions:
+        result.append({
+            "session_id": str(session["_id"]),
+            "title": session.get("title", "New Chat"),
+            "created_at": session.get("created_at"),
+            "updated_at": session.get("updated_at")
+        })
+
+    return result
+
+
+@app.get("/chat/sessions/{session_id}/messages")
+def get_chat_messages(
+    session_id: str,
+    current_user=Depends(get_current_user)
+):
+    if not ObjectId.is_valid(session_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid session ID"
+        )
+
+    session = chat_sessions_collection.find_one(
+        {
+            "_id": ObjectId(session_id),
+            "user_id": current_user["sub"]
+        }
+    )
+
+    if not session:
+        raise HTTPException(
+            status_code=404,
+            detail="Chat session not found"
+        )
+
+    messages = list(
+        chat_messages_collection.find(
+            {
+                "session_id": session_id,
+                "user_id": current_user["sub"]
+            },
+            {
+                "_id": 1,
+                "sender": 1,
+                "message_text": 1,
+                "language": 1,
+                "timestamp": 1
+            }
+        ).sort("timestamp", 1)
+    )
+
+    result = []
+
+    for message in messages:
+        result.append({
+            "message_id": str(message["_id"]),
+            "sender": message.get("sender"),
+            "message_text": message.get("message_text"),
+            "language": message.get("language"),
+            "timestamp": message.get("timestamp")
+        })
+
+    return {
+        "session_id": session_id,
+        "messages": result
+    }
+
+
+@app.delete("/chat/sessions/{session_id}")
+def delete_chat_session(
+    session_id: str,
+    current_user=Depends(get_current_user)
+):
+    if not ObjectId.is_valid(session_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid session ID"
+        )
+
+    session = chat_sessions_collection.find_one(
+        {
+            "_id": ObjectId(session_id),
+            "user_id": current_user["sub"]
+        }
+    )
+
+    if not session:
+        raise HTTPException(
+            status_code=404,
+            detail="Chat session not found"
+        )
+
+    chat_messages_collection.delete_many(
+        {
+            "session_id": session_id,
+            "user_id": current_user["sub"]
+        }
+    )
+
+    chat_sessions_collection.delete_one(
+        {
+            "_id": ObjectId(session_id),
+            "user_id": current_user["sub"]
+        }
+    )
+
+    return {
+        "message": "Chat session deleted successfully"
     }

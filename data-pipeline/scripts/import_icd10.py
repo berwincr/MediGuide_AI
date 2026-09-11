@@ -43,6 +43,8 @@ print("Connected successfully.")
 
 JSON_PATH = os.path.join(
     os.path.dirname(__file__),
+    "..",
+    "processed",
     "icd10_conditions.json"
 )
 

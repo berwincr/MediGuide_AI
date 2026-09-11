@@ -49,6 +49,7 @@ function MedicineDetails() {
         setMedicine(data);
       } catch (error) {
         console.error("Medicine fetch error:", error);
+
         setMessage(
           error.message || "Unable to connect to the server."
         );
@@ -116,6 +117,7 @@ function MedicineDetails() {
           size={35}
           style={{
             color: "#0F8377",
+            animation: "spin 1s linear infinite",
           }}
         />
 
@@ -399,7 +401,12 @@ function MedicineDetails() {
               }}
             >
               {aiLoading ? (
-                <LoaderCircle size={18} />
+                <LoaderCircle
+                  size={18}
+                  style={{
+                    animation: "spin 1s linear infinite",
+                  }}
+                />
               ) : (
                 <Sparkles size={18} />
               )}
