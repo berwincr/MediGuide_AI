@@ -81,10 +81,10 @@ Do not mix languages unless a medicine name or technical term must remain unchan
 """
 
     models = [
-    "gemini-flash-latest",
-    "gemini-3.5-flash",
-    "gemini-3.1-flash-lite"
-]
+        "gemini-flash-latest",
+        "gemini-3.5-flash",
+        "gemini-3.1-flash-lite"
+    ]
 
     for model_name in models:
 
@@ -244,10 +244,8 @@ End with a short disclaimer explaining that the
 information is for educational purposes only and does
 not replace professional medical advice, diagnosis,
 or treatment.
-==================================================
-LANGUAGE REQUIREMENT
-==================================================
 
+==================================================
 LANGUAGE REQUIREMENT
 ==================================================
 
@@ -271,10 +269,10 @@ Do not mix languages unnecessarily.
 """
 
     models = [
-    "gemini-flash-latest",
-    "gemini-3.5-flash",
-    "gemini-3.1-flash-lite"
-]
+        "gemini-flash-latest",
+        "gemini-3.5-flash",
+        "gemini-3.1-flash-lite"
+    ]
 
     for model_name in models:
 
@@ -297,9 +295,15 @@ Do not mix languages unnecessarily.
         "Please try again later."
     )
 
+
+# --------------------------------------------------
+# AI CHAT WITH CONVERSATION HISTORY
+# --------------------------------------------------
+
 def chat_with_ai(
     message: str,
-    language: str = "en"
+    language: str = "en",
+    conversation_history: list = None
 ) -> str:
 
     language_map = {
@@ -312,41 +316,160 @@ def chat_with_ai(
         "English"
     )
 
+    # ---------------------------------------------
+    # PREPARE CONVERSATION HISTORY
+    # ---------------------------------------------
+
+    if conversation_history is None:
+        conversation_history = []
+
+    history_text = ""
+
+    for item in conversation_history:
+        history_text += (
+            f"{item['sender'].capitalize()}: "
+            f"{item['message_text']}\n"
+        )
+
+    # ---------------------------------------------
+    # GEMINI PROMPT
+    # ---------------------------------------------
+
     prompt = f"""
 You are MediGuide AI, a healthcare education assistant.
 
-The user asked:
+Your task is to provide clear, safe, and context-aware
+healthcare education.
+
+==================================================
+PREVIOUS CONVERSATION
+==================================================
+
+{history_text}
+
+==================================================
+CURRENT USER QUESTION
+==================================================
 
 {message}
 
-Respond in {selected_language}.
+==================================================
+CONTEXT UNDERSTANDING
+==================================================
 
-RULES:
+Use the previous conversation to understand the context
+of the current question.
+
+If the current question uses words such as:
+
+- it
+- this medicine
+- this condition
+- its side effects
+- what about the side effects
+- how does it work
+- is it safe
+
+determine what the user is referring to from the
+previous conversation.
+
+For example:
+
+User: What is paracetamol?
+Assistant: Paracetamol is a commonly used medicine...
+
+User: What are the side effects?
+
+The current question refers to PARACETAMOL.
+
+Do not answer such follow-up questions as completely
+unrelated or generic questions when the previous
+conversation provides a clear context.
+
+If the previous conversation does not provide enough
+information to determine what the user means, ask a
+short clarification question instead of guessing.
+
+==================================================
+SAFETY RULES
+==================================================
 
 1. Provide simple, clear educational health information.
-2. Do not diagnose diseases.
-3. Do not prescribe medicines or dosages.
-4. Do not tell users to start, stop, or change medications.
-5. If the user describes a possible medical emergency, advise them to seek immediate professional medical care.
-6. Do not claim to replace a doctor or healthcare professional.
-7. Keep the explanation understandable for general users.
-8. Structure longer answers clearly using headings or bullet points.
-9. Generate the complete response in {selected_language}.
-10. If the question is unrelated to healthcare or medicines, politely explain that MediGuide AI primarily provides healthcare education.
 
-IMPORTANT:
-This is an educational assistant, not a diagnostic or prescribing system.
+2. Do not diagnose diseases.
+
+3. Do not provide personalized medical diagnoses.
+
+4. Do not prescribe medicines or dosages.
+
+5. Do not tell users to start, stop, increase, decrease,
+   or change medications.
+
+6. Do not provide personalized treatment plans.
+
+7. If the user describes a possible medical emergency,
+   advise them to seek immediate professional medical care.
+
+8. Do not claim to replace a doctor or healthcare
+   professional.
+
+9. Keep the explanation understandable for general users.
+
+10. Structure longer answers clearly using headings
+    or bullet points.
+
+11. Do not invent information from the conversation.
+
+12. If reliable information is unavailable, clearly
+    state that the information is unavailable rather
+    than presenting uncertain information as fact.
+
+13. If the question is unrelated to healthcare or
+    medicines, politely explain that MediGuide AI
+    primarily provides healthcare education.
+
+==================================================
+LANGUAGE
+==================================================
+
+Respond completely in {selected_language}.
+
+If the selected language is Tamil:
+
+- Use natural, simple Tamil.
+- Keep important medical terms in English when this
+  improves clarity.
+- Do not provide a separate English translation.
+
+If the selected language is English:
+
+- Use simple English suitable for a general audience.
+
+==================================================
+IMPORTANT
+==================================================
+
+This is an educational assistant, not a diagnostic
+or prescribing system.
+
+Use the conversation history to maintain context
+between messages.
 """
 
+    # ---------------------------------------------
+    # GEMINI MODEL FALLBACK
+    # ---------------------------------------------
+
     models = [
-    "gemini-flash-latest",
-    "gemini-3.5-flash",
-    "gemini-3.1-flash-lite"
-]
+        "gemini-flash-latest",
+        "gemini-3.5-flash",
+        "gemini-3.1-flash-lite"
+    ]
 
     for model_name in models:
 
         try:
+
             response = client.models.generate_content(
                 model=model_name,
                 contents=prompt
@@ -356,7 +479,10 @@ This is an educational assistant, not a diagnostic or prescribing system.
                 return response.text
 
         except Exception as error:
-            print(f"{model_name} failed: {error}")
+
+            print(
+                f"{model_name} failed: {error}"
+            )
 
     raise Exception(
         "AI service temporarily unavailable."

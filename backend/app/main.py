@@ -1,7 +1,8 @@
 import os
 import shutil
-
+from app.rxnorm_service import find_rxnorm_rxcui
 from datetime import datetime, timezone
+from bson import ObjectId
 
 from fastapi import (
     FastAPI,
@@ -66,6 +67,163 @@ app = FastAPI(
     title="MediGuide AI API"
 )
 
+# ==================================================
+# JWT AUTHENTICATION
+# ==================================================
+
+security = HTTPBearer()
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+
+    token = credentials.credentials
+
+    payload = decode_access_token(token)
+
+    if not payload:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired token"
+        )
+
+    return payload
+
+
+# ==================================================
+# REGISTER USER
+# ==================================================
+
+@app.post("/users/register")
+def register_user(user: UserCreate):
+
+    existing_user = users_collection.find_one(
+        {
+            "email": user.email.lower()
+        }
+    )
+
+    if existing_user:
+        raise HTTPException(
+            status_code=400,
+            detail="User with this email already exists"
+        )
+
+    new_user = {
+        "name": user.name,
+        "email": user.email.lower(),
+        "password": hash_password(user.password),
+        "language": "en",
+        "created_at": datetime.utcnow()
+    }
+
+    result = users_collection.insert_one(
+        new_user
+    )
+
+    return {
+        "message": "User registered successfully",
+        "user_id": str(result.inserted_id)
+    }
+
+
+# ==================================================
+# LOGIN USER
+# ==================================================
+
+@app.post("/users/login")
+def login_user(user: UserLogin):
+
+    existing_user = users_collection.find_one(
+        {
+            "email": user.email.lower()
+        }
+    )
+
+    if not existing_user:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid email or password"
+        )
+
+    if not verify_password(
+        user.password,
+        existing_user["password"]
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid email or password"
+        )
+
+    access_token = create_access_token(
+        {
+            "sub": str(existing_user["_id"]),
+            "email": existing_user["email"]
+        }
+    )
+
+    return {
+        "message": "Login successful",
+        "access_token": access_token,
+        "token_type": "bearer"
+    }
+
+
+# ==================================================
+# GET CURRENT USER
+# ==================================================
+
+@app.get("/users/me")
+def get_current_user_info(
+    current_user: dict = Depends(get_current_user)
+):
+
+    user_id = current_user.get("sub")
+
+    if not user_id:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid token"
+        )
+
+    try:
+
+        object_id = ObjectId(user_id)
+
+    except Exception:
+
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid user ID"
+        )
+
+    existing_user = users_collection.find_one(
+        {
+            "_id": object_id
+        },
+        {
+            "password": 0
+        }
+    )
+
+    if not existing_user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    return {
+        "message": "Authenticated user",
+        "user": {
+            "id": str(existing_user["_id"]),
+            "name": existing_user.get("name"),
+            "email": existing_user.get("email"),
+            "language": existing_user.get("language"),
+            "created_at": existing_user.get("created_at")
+        }
+    }
+
+
 
 # ==================================================
 # SCHEDULER STARTUP / SHUTDOWN
@@ -127,34 +285,110 @@ def medicine_count():
 # ==================================================
 # SEARCH MEDICINES
 # ==================================================
+MEDICINE_SYNONYMS = {
+    # Paracetamol
+    "paracetamol": "acetaminophen",
+    "dolo": "acetaminophen",
+    "dolo 650": "acetaminophen",
+    "crocin": "acetaminophen",
+    "calpol": "acetaminophen",
 
+    # Acetaminophen
+    "acetaminophen": "acetaminophen",
+
+    # Ibuprofen
+    "brufen": "ibuprofen",
+    "ibuprofen": "ibuprofen",
+
+    # Cetirizine
+    "cetirizine": "cetirizine",
+    "zyrtec": "cetirizine",
+
+    # Pantoprazole
+    "pantoprazole": "pantoprazole",
+    "pantocid": "pantoprazole",
+
+    # Omeprazole
+    "omeprazole": "omeprazole",
+    "omez": "omeprazole",
+
+    # Amoxicillin + Clavulanic acid
+    "augmentin": "amoxicillin",
+    
+    # Azithromycin
+    "azithromycin": "azithromycin",
+    "azithral": "azithromycin",
+}
 @app.get("/medicines/search/{name}")
 def search_medicine(name: str):
 
-    medicines = list(
-        medicines_collection.find(
-            {
-                "name": {
-                    "$regex": name,
-                    "$options": "i"
+    search_name = name.strip()
+    search_name_lower = search_name.lower()
+
+    # Check whether the user searched using a known alias/brand
+    is_alias = search_name_lower in MEDICINE_SYNONYMS
+
+    if is_alias:
+        actual_name = MEDICINE_SYNONYMS[search_name_lower]
+
+        medicines = list(
+            medicines_collection.find(
+                {
+                    "name": {
+                        "$regex": f"^{actual_name}$",
+                        "$options": "i"
+                    }
+                },
+                {
+                    "_id": 0,
+                    "rx_cui": 1,
+                    "name": 1,
+                    "term_type": 1,
+                    "source": 1
                 }
-            },
-            {
-                "_id": 0,
-                "rx_cui": 1,
-                "name": 1,
-                "term_type": 1,
-                "source": 1
-            }
-        ).limit(20)
-    )
+            ).limit(20)
+        )
+
+    else:
+        medicines = list(
+            medicines_collection.find(
+                {
+                    "$or": [
+                        {
+                            "name": {
+                                "$regex": search_name,
+                                "$options": "i"
+                            }
+                        },
+                        {
+                            "openfda.brand_names": {
+                                "$regex": search_name,
+                                "$options": "i"
+                            }
+                        },
+                        {
+                            "openfda.generic_names": {
+                                "$regex": search_name,
+                                "$options": "i"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "_id": 0,
+                    "rx_cui": 1,
+                    "name": 1,
+                    "term_type": 1,
+                    "source": 1
+                }
+            ).limit(20)
+        )
 
     return {
         "query": name,
         "count": len(medicines),
         "results": medicines
     }
-
 
 # ==================================================
 # UNIFIED SEARCH
@@ -212,7 +446,6 @@ def unified_search(query: str):
         "medicines": medicines,
         "conditions": conditions
     }
-
 
 # ==================================================
 # CLEAN MEDICINE DETAILS
@@ -615,21 +848,140 @@ def get_ai_condition_explanation(
 # ==================================================
 # AI CHAT ASSISTANT
 # ==================================================
-
 @app.post("/ai-chat")
-def ai_chat(request: ChatRequest):
+def ai_chat(
+    request: ChatRequest,
+    current_user=Depends(get_current_user)
+):
 
     try:
 
+        now = datetime.now(timezone.utc)
+
+        # ---------------------------------------------
+        # FIND OR CREATE CHAT SESSION
+        # ---------------------------------------------
+
+        if request.session_id:
+
+            if not ObjectId.is_valid(request.session_id):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid session ID"
+                )
+
+            session = chat_sessions_collection.find_one(
+                {
+                    "_id": ObjectId(request.session_id),
+                    "user_id": current_user["sub"]
+                }
+            )
+
+            if not session:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Chat session not found"
+                )
+
+            session_id = request.session_id
+
+        else:
+
+            session_data = {
+                "user_id": current_user["sub"],
+                "title": request.message.strip()[:60],
+                "created_at": now,
+                "updated_at": now
+            }
+
+            result = chat_sessions_collection.insert_one(
+                session_data
+            )
+
+            session_id = str(result.inserted_id)
+
+        # ---------------------------------------------
+        # GET PREVIOUS CONVERSATION HISTORY
+        # ---------------------------------------------
+
+        conversation_history = list(
+            chat_messages_collection.find(
+                {
+                    "session_id": session_id,
+                    "user_id": current_user["sub"]
+                },
+                {
+                    "_id": 0,
+                    "sender": 1,
+                    "message_text": 1
+                }
+            ).sort("timestamp", 1)
+        )
+
+        # ---------------------------------------------
+        # SAVE CURRENT USER MESSAGE
+        # ---------------------------------------------
+
+        chat_messages_collection.insert_one(
+            {
+                "session_id": session_id,
+                "user_id": current_user["sub"],
+                "sender": "user",
+                "message_text": request.message,
+                "language": request.language,
+                "timestamp": now
+            }
+        )
+
+        # ---------------------------------------------
+        # GENERATE AI RESPONSE
+        # ---------------------------------------------
+
         response = chat_with_ai(
             message=request.message,
-            language=request.language
+            language=request.language,
+            conversation_history=conversation_history
+        )
+
+        # ---------------------------------------------
+        # SAVE AI RESPONSE
+        # ---------------------------------------------
+
+        chat_messages_collection.insert_one(
+            {
+                "session_id": session_id,
+                "user_id": current_user["sub"],
+                "sender": "assistant",
+                "message_text": response,
+                "language": request.language,
+                "timestamp": datetime.now(timezone.utc)
+            }
+        )
+
+        # ---------------------------------------------
+        # UPDATE SESSION
+        # ---------------------------------------------
+
+        chat_sessions_collection.update_one(
+            {
+                "_id": ObjectId(session_id),
+                "user_id": current_user["sub"]
+            },
+            {
+                "$set": {
+                    "updated_at": datetime.now(timezone.utc)
+                }
+            }
         )
 
         return {
             "response": response,
-            "language": request.language
+            "language": request.language,
+            "session_id": session_id
         }
+
+    except HTTPException:
+        raise
 
     except Exception as error:
 
@@ -642,165 +994,165 @@ def ai_chat(request: ChatRequest):
                 "Please try again later."
             )
         )
+# --------------------------------------------------
+# CHAT SESSIONS
+# --------------------------------------------------
+
+@app.post("/chat/sessions")
+def create_chat_session(
+    session: ChatSessionCreate,
+    current_user=Depends(get_current_user)
+):
+    now = datetime.now(timezone.utc)
+
+    title = session.title.strip() if session.title else "New Chat"
+
+    session_data = {
+        "user_id": current_user["sub"],
+        "title": title,
+        "created_at": now,
+        "updated_at": now
+    }
+
+    result = chat_sessions_collection.insert_one(session_data)
+
+    return {
+        "session_id": str(result.inserted_id),
+        "title": title,
+        "created_at": now,
+        "updated_at": now
+    }
 
 
-# ==================================================
-# REGISTER USER
-# ==================================================
-
-@app.post("/users/register")
-def register_user(user: UserCreate):
-
-    existing_user = users_collection.find_one(
-        {
-            "email": user.email.lower()
-        }
+@app.get("/chat/sessions")
+def get_chat_sessions(
+    current_user=Depends(get_current_user)
+):
+    sessions = list(
+        chat_sessions_collection.find(
+            {
+                "user_id": current_user["sub"]
+            },
+            {
+                "_id": 1,
+                "title": 1,
+                "created_at": 1,
+                "updated_at": 1
+            }
+        ).sort("updated_at", -1)
     )
 
-    if existing_user:
+    result = []
+
+    for session in sessions:
+        result.append({
+            "session_id": str(session["_id"]),
+            "title": session.get("title", "New Chat"),
+            "created_at": session.get("created_at"),
+            "updated_at": session.get("updated_at")
+        })
+
+    return result
+
+
+@app.get("/chat/sessions/{session_id}/messages")
+def get_chat_messages(
+    session_id: str,
+    current_user=Depends(get_current_user)
+):
+    if not ObjectId.is_valid(session_id):
         raise HTTPException(
             status_code=400,
-            detail="User with this email already exists"
+            detail="Invalid session ID"
         )
 
-    new_user = {
-        "name": user.name,
-        "email": user.email.lower(),
-        "password": hash_password(user.password),
-        "language": "en",
-        "created_at": datetime.utcnow()
-    }
-
-    result = users_collection.insert_one(
-        new_user
-    )
-
-    return {
-        "message": "User registered successfully",
-        "user_id": str(result.inserted_id)
-    }
-
-
-# ==================================================
-# LOGIN USER
-# ==================================================
-
-@app.post("/users/login")
-def login_user(user: UserLogin):
-
-    existing_user = users_collection.find_one(
+    session = chat_sessions_collection.find_one(
         {
-            "email": user.email.lower()
+            "_id": ObjectId(session_id),
+            "user_id": current_user["sub"]
         }
     )
 
-    if not existing_user:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid email or password"
-        )
-
-    if not verify_password(
-        user.password,
-        existing_user["password"]
-    ):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid email or password"
-        )
-
-    access_token = create_access_token(
-        {
-            "sub": str(existing_user["_id"]),
-            "email": existing_user["email"]
-        }
-    )
-
-    return {
-        "message": "Login successful",
-        "access_token": access_token,
-        "token_type": "bearer"
-    }
-
-
-# ==================================================
-# JWT AUTHENTICATION
-# ==================================================
-
-security = HTTPBearer()
-
-
-def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
-):
-
-    token = credentials.credentials
-
-    payload = decode_access_token(token)
-
-    if not payload:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid or expired token"
-        )
-
-    return payload
-
-
-# ==================================================
-# GET CURRENT USER
-# ==================================================
-
-@app.get("/users/me")
-def get_current_user_info(
-    current_user: dict = Depends(get_current_user)
-):
-
-    user_id = current_user.get("sub")
-
-    if not user_id:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid token"
-        )
-
-    try:
-
-        object_id = ObjectId(user_id)
-
-    except Exception:
-
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid user ID"
-        )
-
-    existing_user = users_collection.find_one(
-        {
-            "_id": object_id
-        },
-        {
-            "password": 0
-        }
-    )
-
-    if not existing_user:
+    if not session:
         raise HTTPException(
             status_code=404,
-            detail="User not found"
+            detail="Chat session not found"
         )
 
+    messages = list(
+        chat_messages_collection.find(
+            {
+                "session_id": session_id,
+                "user_id": current_user["sub"]
+            },
+            {
+                "_id": 1,
+                "sender": 1,
+                "message_text": 1,
+                "language": 1,
+                "timestamp": 1
+            }
+        ).sort("timestamp", 1)
+    )
+
+    result = []
+
+    for message in messages:
+        result.append({
+            "message_id": str(message["_id"]),
+            "sender": message.get("sender"),
+            "message_text": message.get("message_text"),
+            "language": message.get("language"),
+            "timestamp": message.get("timestamp")
+        })
+
     return {
-        "message": "Authenticated user",
-        "user": {
-            "id": str(existing_user["_id"]),
-            "name": existing_user.get("name"),
-            "email": existing_user.get("email"),
-            "language": existing_user.get("language"),
-            "created_at": existing_user.get("created_at")
-        }
+        "session_id": session_id,
+        "messages": result
     }
 
+
+@app.delete("/chat/sessions/{session_id}")
+def delete_chat_session(
+    session_id: str,
+    current_user=Depends(get_current_user)
+):
+    if not ObjectId.is_valid(session_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid session ID"
+        )
+
+    session = chat_sessions_collection.find_one(
+        {
+            "_id": ObjectId(session_id),
+            "user_id": current_user["sub"]
+        }
+    )
+
+    if not session:
+        raise HTTPException(
+            status_code=404,
+            detail="Chat session not found"
+        )
+
+    chat_messages_collection.delete_many(
+        {
+            "session_id": session_id,
+            "user_id": current_user["sub"]
+        }
+    )
+
+    chat_sessions_collection.delete_one(
+        {
+            "_id": ObjectId(session_id),
+            "user_id": current_user["sub"]
+        }
+    )
+
+    return {
+        "message": "Chat session deleted successfully"
+    }
 
 # ==================================================
 # OCR PRESCRIPTION
@@ -1055,163 +1407,3 @@ def test_push(
         "message": "Test push notification sent"
     }
 
-
-# --------------------------------------------------
-# CHAT SESSIONS
-# --------------------------------------------------
-
-@app.post("/chat/sessions")
-def create_chat_session(
-    session: ChatSessionCreate,
-    current_user=Depends(get_current_user)
-):
-    now = datetime.now(timezone.utc)
-
-    title = session.title.strip() if session.title else "New Chat"
-
-    session_data = {
-        "user_id": current_user["sub"],
-        "title": title,
-        "created_at": now,
-        "updated_at": now
-    }
-
-    result = chat_sessions_collection.insert_one(session_data)
-
-    return {
-        "session_id": str(result.inserted_id),
-        "title": title,
-        "created_at": now,
-        "updated_at": now
-    }
-
-
-@app.get("/chat/sessions")
-def get_chat_sessions(
-    current_user=Depends(get_current_user)
-):
-    sessions = list(
-        chat_sessions_collection.find(
-            {
-                "user_id": current_user["sub"]
-            },
-            {
-                "_id": 1,
-                "title": 1,
-                "created_at": 1,
-                "updated_at": 1
-            }
-        ).sort("updated_at", -1)
-    )
-
-    result = []
-
-    for session in sessions:
-        result.append({
-            "session_id": str(session["_id"]),
-            "title": session.get("title", "New Chat"),
-            "created_at": session.get("created_at"),
-            "updated_at": session.get("updated_at")
-        })
-
-    return result
-
-
-@app.get("/chat/sessions/{session_id}/messages")
-def get_chat_messages(
-    session_id: str,
-    current_user=Depends(get_current_user)
-):
-    if not ObjectId.is_valid(session_id):
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid session ID"
-        )
-
-    session = chat_sessions_collection.find_one(
-        {
-            "_id": ObjectId(session_id),
-            "user_id": current_user["sub"]
-        }
-    )
-
-    if not session:
-        raise HTTPException(
-            status_code=404,
-            detail="Chat session not found"
-        )
-
-    messages = list(
-        chat_messages_collection.find(
-            {
-                "session_id": session_id,
-                "user_id": current_user["sub"]
-            },
-            {
-                "_id": 1,
-                "sender": 1,
-                "message_text": 1,
-                "language": 1,
-                "timestamp": 1
-            }
-        ).sort("timestamp", 1)
-    )
-
-    result = []
-
-    for message in messages:
-        result.append({
-            "message_id": str(message["_id"]),
-            "sender": message.get("sender"),
-            "message_text": message.get("message_text"),
-            "language": message.get("language"),
-            "timestamp": message.get("timestamp")
-        })
-
-    return {
-        "session_id": session_id,
-        "messages": result
-    }
-
-
-@app.delete("/chat/sessions/{session_id}")
-def delete_chat_session(
-    session_id: str,
-    current_user=Depends(get_current_user)
-):
-    if not ObjectId.is_valid(session_id):
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid session ID"
-        )
-
-    session = chat_sessions_collection.find_one(
-        {
-            "_id": ObjectId(session_id),
-            "user_id": current_user["sub"]
-        }
-    )
-
-    if not session:
-        raise HTTPException(
-            status_code=404,
-            detail="Chat session not found"
-        )
-
-    chat_messages_collection.delete_many(
-        {
-            "session_id": session_id,
-            "user_id": current_user["sub"]
-        }
-    )
-
-    chat_sessions_collection.delete_one(
-        {
-            "_id": ObjectId(session_id),
-            "user_id": current_user["sub"]
-        }
-    )
-
-    return {
-        "message": "Chat session deleted successfully"
-    }

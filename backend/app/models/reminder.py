@@ -13,6 +13,6 @@ class ReminderRequest(BaseModel):
     notes: Optional[str] = ""
 
 class PushSubscription(BaseModel):
-    endpoint: str
-    p256dh: str
+    endpoint: str                                                  #Endpoint url that the backend can use to send push notifications
+    p256dh: str                                                    #Web Push subscription cryptographic information
     auth: str

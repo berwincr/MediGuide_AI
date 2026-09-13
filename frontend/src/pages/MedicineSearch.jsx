@@ -381,14 +381,26 @@ function MedicineSearch() {
                   </div>
 
                   <h3
-                    style={{
-                      margin: "18px 0 8px",
-                      color: "#1e293b",
-                      fontSize: "20px",
-                    }}
-                  >
-                    {medicine.name}
-                  </h3>
+  style={{
+    margin: "18px 0 8px",
+    color: "#1e293b",
+    fontSize: "20px",
+  }}
+>
+  {medicine.name}
+</h3>
+
+{searchTerm.trim().toLowerCase() !== medicine.name.toLowerCase() && (
+  <p
+    style={{
+      margin: "0",
+      color: "#64748b",
+      fontSize: "14px",
+    }}
+  >
+    Searched as: {searchTerm.trim()}
+  </p>
+)}
 
                   <div
                     style={{
