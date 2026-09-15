@@ -858,6 +858,11 @@ def create_chat_session(
     }
 
 
+# ==================================================
+# GET CHAT SESSION 
+# ==================================================
+
+
 @app.get("/chat/sessions")
 def get_chat_sessions(
     current_user=Depends(get_current_user)
@@ -889,7 +894,7 @@ def get_chat_sessions(
     return result
 
 # ==================================================
-# GET CHAT SESSION
+# GET CHAT SESSION BY SESSION ID
 # ==================================================
 
 @app.get("/chat/sessions/{session_id}/messages")
@@ -1006,7 +1011,7 @@ async def ocr(
 
     os.makedirs(
         "uploads",
-        exist_ok=True
+        exist_ok=True                      #If the directory already exists doesnt give an error
     )
 
     file_path = os.path.join(
@@ -1019,12 +1024,13 @@ async def ocr(
         # ------------------------------------------
         # SAVE UPLOADED IMAGE
         # ------------------------------------------
-
-        with open(
+ 
+        with open(                 #write the file contents in   a buffer
             file_path,
             "wb"
         ) as buffer:
-
+            
+          #Copy the uploaded file to the buffer
             shutil.copyfileobj(
                 file.file,
                 buffer
@@ -1185,14 +1191,14 @@ def create_reminder(
     current_user=Depends(get_current_user)
 ):
 
-    reminder_data = reminder.model_dump()
+    reminder_data = reminder.model_dump()          #COnvert the pydnatic model to a normal dict 
 
     reminder_data["user_id"] = current_user["sub"]
 
     reminder_data["active"] = True
 
-    result = reminders_collection.insert_one(
-        reminder_data
+    result = reminders_collection.insert_one(                   #Mongodb accepts only doc/ dict type
+        reminder_data  
     )
 
     return {
@@ -1232,7 +1238,7 @@ def get_reminders(
 
     for reminder in reminders:
 
-        reminder["_id"] = str(
+        reminder["_id"] = str(             #Convert mongodb id to a normal string 
             reminder["_id"]
         )
 
@@ -1256,7 +1262,7 @@ def delete_reminder(
         }
     )
 
-    if result.deleted_count == 0:
+    if result.deleted_count == 0:                   # if no documents were deleted raise an exception
 
         raise HTTPException(
             status_code=404,
