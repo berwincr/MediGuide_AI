@@ -398,7 +398,7 @@ function MedicineSearch() {
       fontSize: "14px",
     }}
   >
-    Searched as: {searchTerm.trim()}
+    Also known as: {searchTerm.trim()}
   </p>
 )}
 

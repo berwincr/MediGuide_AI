@@ -37,7 +37,9 @@ function MedicineDetails() {
         setMessage("");
 
         const response = await fetch(
-          `http://127.0.0.1:8000/medicines/${encodeURIComponent(rx_cui)}`
+          `http://127.0.0.1:8000/medicine-details/${encodeURIComponent(
+            rx_cui
+          )}`
         );
 
         const data = await response.json();
@@ -164,26 +166,7 @@ function MedicineDetails() {
     ? medicine.source.join(", ")
     : medicine.source || "Not available";
 
-  const medicalInfo =
-    medicine.medical_information || {};
-
-  // --------------------------------------------------
-  // PREVIEW LONG TEXT
-  // --------------------------------------------------
-
-  const getPreview = (data, maxLength = 500) => {
-    if (!data) return null;
-
-    const text = Array.isArray(data)
-      ? data.join(" ")
-      : String(data);
-
-    if (text.length > maxLength) {
-      return text.substring(0, maxLength) + "...";
-    }
-
-    return text;
-  };
+  const medicalInfo = medicine.medical_information || {};
 
   return (
     <div
@@ -528,23 +511,19 @@ function MedicineDetails() {
 
       {/* USES AND INDICATIONS */}
 
-      {getPreview(
-        medicalInfo.indications_and_usage
-      ) && (
+      {medicalInfo.indications_and_usage && (
         <Section title="Uses and Indications">
-          <p style={textStyle}>
-            {getPreview(
-              medicalInfo.indications_and_usage
-            )}
-          </p>
+          <ExpandableText
+            data={medicalInfo.indications_and_usage}
+            wordLimit={500}
+            style={textStyle}
+          />
         </Section>
       )}
 
       {/* WARNINGS */}
 
-      {getPreview(
-        medicalInfo.warnings_and_cautions
-      ) && (
+      {medicalInfo.warnings_and_cautions && (
         <Section
           title="Warnings and Precautions"
           icon={<AlertTriangle size={22} />}
@@ -556,12 +535,11 @@ function MedicineDetails() {
               borderRadius: "10px",
             }}
           >
-            <p style={textStyle}>
-              {getPreview(
-                medicalInfo.warnings_and_cautions,
-                600
-              )}
-            </p>
+            <ExpandableText
+              data={medicalInfo.warnings_and_cautions}
+              wordLimit={500}
+              style={textStyle}
+            />
           </div>
         </Section>
       )}
@@ -583,12 +561,11 @@ function MedicineDetails() {
               >
                 <h3>{entry.title}</h3>
 
-                <p style={textStyle}>
-                  {getPreview(
-                    entry.summary,
-                    500
-                  )}
-                </p>
+                <ExpandableText
+                  data={entry.summary}
+                  wordLimit={500}
+                  style={textStyle}
+                />
 
                 {entry.url && (
                   <a
@@ -635,6 +612,58 @@ function MedicineDetails() {
           diagnosis, or treatment.
         </p>
       </div>
+    </div>
+  );
+}
+
+/* --------------------------------------------------
+   EXPANDABLE TEXT
+-------------------------------------------------- */
+
+function ExpandableText({
+  data,
+  wordLimit = 500,
+  style = {},
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (!data) return null;
+
+  const text = Array.isArray(data)
+    ? data.join(" ")
+    : String(data);
+
+  const words = text.trim().split(/\s+/);
+
+  const isLong = words.length > wordLimit;
+
+  const displayedText =
+    expanded || !isLong
+      ? text
+      : words.slice(0, wordLimit).join(" ") + "...";
+
+  return (
+    <div>
+      <p style={style}>
+        {displayedText}
+      </p>
+
+      {isLong && (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          style={{
+            background: "transparent",
+            border: "none",
+            padding: "0",
+            color: "#0F8377",
+            fontWeight: "bold",
+            cursor: "pointer",
+            fontSize: "14px",
+          }}
+        >
+          {expanded ? "Read less ↑" : "Read more →"}
+        </button>
+      )}
     </div>
   );
 }

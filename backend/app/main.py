@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 from app.rxnorm_service import find_rxnorm_rxcui
 from datetime import datetime, timezone
@@ -114,7 +115,7 @@ def register_user(user: UserCreate):
         "email": user.email.lower(),
         "password": hash_password(user.password),
         "language": "en",
-        "created_at": datetime.utcnow()
+        "created_at": datetime.now(timezone.utc)
     }
 
     result = users_collection.insert_one(
@@ -293,9 +294,6 @@ MEDICINE_SYNONYMS = {
     "crocin": "acetaminophen",
     "calpol": "acetaminophen",
 
-    # Acetaminophen
-    "acetaminophen": "acetaminophen",
-
     # Ibuprofen
     "brufen": "ibuprofen",
     "ibuprofen": "ibuprofen",
@@ -353,26 +351,10 @@ def search_medicine(name: str):
         medicines = list(
             medicines_collection.find(
                 {
-                    "$or": [
-                        {
-                            "name": {
-                                "$regex": search_name,
-                                "$options": "i"
-                            }
-                        },
-                        {
-                            "openfda.brand_names": {
-                                "$regex": search_name,
-                                "$options": "i"
-                            }
-                        },
-                        {
-                            "openfda.generic_names": {
-                                "$regex": search_name,
-                                "$options": "i"
-                            }
-                        }
-                    ]
+                    "name": {
+                        "$regex": f"^{search_name}",
+                        "$options": "i"
+                    }
                 },
                 {
                     "_id": 0,
@@ -383,6 +365,7 @@ def search_medicine(name: str):
                 }
             ).limit(20)
         )
+    
 
     return {
         "query": name,
@@ -390,67 +373,10 @@ def search_medicine(name: str):
         "results": medicines
     }
 
-# ==================================================
-# UNIFIED SEARCH
-# ==================================================
-
-@app.get("/search/{query}")
-def unified_search(query: str):
-
-    medicines = list(
-        medicines_collection.find(
-            {
-                "name": {
-                    "$regex": query,
-                    "$options": "i"
-                }
-            },
-            {
-                "_id": 0,
-                "rx_cui": 1,
-                "name": 1,
-                "term_type": 1
-            }
-        ).limit(10)
-    )
-
-    conditions = list(
-        icd10_collection.find(
-            {
-                "$or": [
-                    {
-                        "code": {
-                            "$regex": query,
-                            "$options": "i"
-                        }
-                    },
-                    {
-                        "description": {
-                            "$regex": query,
-                            "$options": "i"
-                        }
-                    }
-                ]
-            },
-            {
-                "_id": 0,
-                "code": 1,
-                "description": 1,
-                "chapter": 1
-            }
-        ).limit(10)
-    )
-
-    return {
-        "query": query,
-        "medicines": medicines,
-        "conditions": conditions
-    }
 
 # ==================================================
 # CLEAN MEDICINE DETAILS
 # ==================================================
-
 @app.get("/medicine-details/{rx_cui}")
 def get_medicine_details(rx_cui: str):
 
@@ -465,27 +391,27 @@ def get_medicine_details(rx_cui: str):
             detail="Medicine not found"
         )
 
-    medlineplus_entries = (
-        medicine
-        .get("medlineplus", {})
-        .get("entries", [])
-    )
-
     return {
         "rx_cui": medicine.get("rx_cui"),
         "name": medicine.get("name"),
         "term_type": medicine.get("term_type"),
-        "source": medicine.get("source"),
-        "information": [
-            {
-                "title": entry.get("title"),
-                "summary": entry.get("summary"),
-                "url": entry.get("url")
-            }
-            for entry in medlineplus_entries
-        ]
-    }
+        "source": medicine.get("source", []),
 
+        "medical_information": medicine.get(
+            "medical_information",
+            {}
+        ),
+
+        "openfda": medicine.get(
+            "openfda",
+            {}
+        ),
+
+        "medlineplus": medicine.get(
+            "medlineplus",
+            {}
+        )
+    }
 
 # ==================================================
 # GET MEDICINE BY RxCUI
@@ -510,78 +436,6 @@ def get_medicine(rx_cui: str):
         )
 
     return medicine
-
-
-# ==================================================
-# GET ALL MEDICINES
-# ==================================================
-
-@app.get("/medicines")
-def get_medicines():
-
-    medicines = list(
-        medicines_collection.find(
-            {},
-            {
-                "_id": 0,
-                "rx_cui": 1,
-                "name": 1,
-                "term_type": 1
-            }
-        ).limit(100)
-    )
-
-    return {
-        "count": len(medicines),
-        "results": medicines
-    }
-
-
-# ==================================================
-# ADD CUSTOM MEDICINE
-# ==================================================
-
-@app.post("/medicines")
-def add_medicine(medicine: Medicine):
-
-    existing_medicine = medicines_collection.find_one(
-        {
-            "name": {
-                "$regex": f"^{medicine.name}$",
-                "$options": "i"
-            }
-        }
-    )
-
-    if existing_medicine:
-        raise HTTPException(
-            status_code=400,
-            detail="Medicine already exists"
-        )
-
-    result = medicines_collection.insert_one(
-        medicine.model_dump()
-    )
-
-    return {
-        "message": "Medicine added successfully",
-        "id": str(result.inserted_id)
-    }
-
-
-# ==================================================
-# ICD-10 HEALTH CHECK
-# ==================================================
-
-@app.get("/icd10/count")
-def icd10_count():
-
-    total = icd10_collection.count_documents({})
-
-    return {
-        "total_documents": total
-    }
-
 
 # ==================================================
 # SEARCH ICD-10 CONDITIONS
@@ -618,7 +472,7 @@ def search_icd10(
     conditions = list(
         icd10_collection.find(
             {
-                "$or": [
+                "$or": [                                       #Execute either one of the true conditions
                     {
                         "code": {
                             "$regex": f"^{query}",
@@ -628,12 +482,12 @@ def search_icd10(
                     {
                         "description": {
                             "$regex": query,
-                            "$options": "i"
+                            "$options": "i"                          #Case insensitive
                         }
                     }
                 ]
             },
-            {
+            {                                  #Mongodb projection
                 "_id": 0,
                 "code": 1,
                 "description": 1,
@@ -642,11 +496,12 @@ def search_icd10(
             }
         )
     )
+   #Make the descriptors start with the search query appear first
 
     conditions.sort(
         key=lambda x: (
-            not x["description"].lower().startswith(query_lower),
-            len(x["code"])
+            not x["description"].lower().startswith(query_lower),          #False is generally sorted first
+            len(x["code"])                                                 #Ascending order of length
         )
     )
 
@@ -668,29 +523,7 @@ def search_icd10(
         "total_pages": total_pages,
         "results": paginated_results
     }
-# ==================================================
-# GET ICD-10 BY CODE
-# ==================================================
 
-@app.get("/icd10/{code}")
-def get_icd10(code: str):
-
-    condition = icd10_collection.find_one(
-        {
-            "code": code
-        },
-        {
-            "_id": 0
-        }
-    )
-
-    if not condition:
-        raise HTTPException(
-            status_code=404,
-            detail="ICD-10 condition not found"
-        )
-
-    return condition
 
 
 # ==================================================
@@ -994,6 +827,7 @@ def ai_chat(
                 "Please try again later."
             )
         )
+    
 # --------------------------------------------------
 # CHAT SESSIONS
 # --------------------------------------------------
@@ -1054,6 +888,9 @@ def get_chat_sessions(
 
     return result
 
+# ==================================================
+# GET CHAT SESSION
+# ==================================================
 
 @app.get("/chat/sessions/{session_id}/messages")
 def get_chat_messages(
@@ -1111,6 +948,9 @@ def get_chat_messages(
         "messages": result
     }
 
+# ==================================================
+# DELETE CHAT SESSION
+# ==================================================
 
 @app.delete("/chat/sessions/{session_id}")
 def delete_chat_session(
@@ -1154,6 +994,7 @@ def delete_chat_session(
         "message": "Chat session deleted successfully"
     }
 
+
 # ==================================================
 # OCR PRESCRIPTION
 # ==================================================
@@ -1173,67 +1014,167 @@ async def ocr(
         file.filename
     )
 
-    with open(
-        file_path,
-        "wb"
-    ) as buffer:
+    try:
 
-        shutil.copyfileobj(
-            file.file,
-            buffer
+        # ------------------------------------------
+        # SAVE UPLOADED IMAGE
+        # ------------------------------------------
+
+        with open(
+            file_path,
+            "wb"
+        ) as buffer:
+
+            shutil.copyfileobj(
+                file.file,
+                buffer
+            )
+
+        # ------------------------------------------
+        # OCR
+        # ------------------------------------------
+
+        text = extract_text(
+            file_path
         )
 
-    text = extract_text(
-        file_path
-    )
+        # ------------------------------------------
+        # EXTRACT MEDICINE CANDIDATES
+        # ------------------------------------------
 
-    candidates = extract_medicine_candidates(
-        text
-    )
-
-    medicines = []
-
-    for candidate in candidates:
-
-        generic_name = normalize_medicine_name(
-            candidate
+        candidates = extract_medicine_candidates(
+            text
         )
 
-        results = list(
-            medicines_collection.find(
-                {
-                    "name": {
-                        "$regex": generic_name,
-                        "$options": "i"
+        medicines = []
+
+        # ------------------------------------------
+        # PROCESS EACH CANDIDATE
+        # ------------------------------------------
+
+        for candidate in candidates:
+
+            generic_name = normalize_medicine_name(
+                candidate
+            )
+
+            # --------------------------------------
+            # SKIP EMPTY RESULTS
+            # --------------------------------------
+
+            if not generic_name:
+                continue
+
+            # --------------------------------------
+            # EXACT MEDICINE SEARCH
+            # --------------------------------------
+
+            results = list(
+                medicines_collection.find(
+                    {
+                        "name": {
+                            "$regex": (
+                                "^"
+                                + re.escape(
+                                    generic_name
+                                )
+                                + "$"
+                            ),
+                            "$options": "i"
+                        }
+                    },
+                    {
+                        "_id": 0,
+                        "rx_cui": 1,
+                        "name": 1,
+                        "term_type": 1,
+                        "source": 1
                     }
-                },
+                ).limit(5)
+            )
+
+            # --------------------------------------
+            # DETERMINE CONFIDENCE
+            # --------------------------------------
+
+            if results:
+
+                if (
+                    candidate.strip().lower()
+                    == generic_name.strip().lower()
+                ):
+
+                    confidence = "high"
+
+                else:
+
+                    confidence = "high"
+
+            else:
+
+                confidence = "unverified"
+
+            # --------------------------------------
+            # ADD RESULT
+            # --------------------------------------
+
+            medicines.append(
                 {
-                    "_id": 0,
-                    "rx_cui": 1,
-                    "name": 1,
-                    "term_type": 1,
-                    "source": 1
+                    "ocr_name": candidate,
+                    "possible_generic": generic_name,
+                    "confidence": confidence,
+                    "matches": results
                 }
-            ).limit(5)
+            )
+
+        # ------------------------------------------
+        # RETURN OCR RESULT
+        # ------------------------------------------
+
+        return {
+            "filename": file.filename,
+            "text": text,
+            "medicines": medicines
+        }
+
+    # ----------------------------------------------
+    # ERROR HANDLING
+    # ----------------------------------------------
+
+    except Exception as error:
+
+        print(
+            "OCR ERROR:",
+            repr(error)
         )
 
-        medicines.append(
-            {
-                "ocr_name": candidate,
-                "possible_generic": generic_name,
-                "matches": results
-            }
+        raise HTTPException(
+            status_code=500,
+            detail=str(error)
         )
 
-    os.remove(file_path)
+    # ----------------------------------------------
+    # DELETE TEMPORARY FILE
+    # ----------------------------------------------
 
-    return {
-        "filename": file.filename,
-        "text": text,
-        "medicines": medicines
-    }
+    finally:
 
+        if os.path.exists(
+            file_path
+        ):
 
+            try:
+
+                os.remove(
+                    file_path
+                )
+
+            except Exception as error:
+
+                print(
+                    "FILE DELETE ERROR:",
+                    repr(error)
+                )
 # ==================================================
 # CREATE REMINDER
 # ==================================================
@@ -1360,50 +1301,5 @@ def save_push_subscription(
 
     return {
         "message": "Push subscription saved successfully"
-    }
-
-
-# ==================================================
-# TEST PUSH
-# ==================================================
-
-@app.post("/push/test")
-def test_push(
-    current_user=Depends(get_current_user)
-):
-
-    user = users_collection.find_one(
-        {
-            "_id": ObjectId(
-                current_user["sub"]
-            )
-        }
-    )
-
-    if not user or "push_subscription" not in user:
-
-        raise HTTPException(
-            status_code=404,
-            detail="Push subscription not found"
-        )
-
-    success = send_push_notification(
-        subscription=user["push_subscription"],
-        title="MediGuide AI 💊",
-        body="Web Push notifications are working!",
-        data={
-            "type": "test"
-        }
-    )
-
-    if not success:
-
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to send push notification"
-        )
-
-    return {
-        "message": "Test push notification sent"
     }
 

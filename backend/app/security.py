@@ -67,7 +67,7 @@ def create_access_token(data: dict) -> str:
 # VERIFY JWT ACCESS TOKEN
 # --------------------------------------------------
 
-def decode_access_token(token: str) -> dict:
+def decode_access_token(token: str) -> dict | None:
 
     try:
         payload = jwt.decode(
