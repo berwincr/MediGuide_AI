@@ -47,13 +47,13 @@ def verify_password(
 
 def create_access_token(data: dict) -> str:
 
-    to_encode = data.copy()
+    to_encode = data.copy()                                  #Copy the data
 
     expire = datetime.now(timezone.utc) + timedelta(
         minutes=ACCESS_TOKEN_EXPIRE_MINUTES
     )
 
-    to_encode.update({
+    to_encode.update({                               #Add expiration time to the to_encode data
         "exp": expire
     })
 
