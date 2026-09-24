@@ -1295,7 +1295,7 @@ def save_push_subscription(
     users_collection.update_one(
         {
             "_id": ObjectId(
-                current_user["sub"]
+                current_user["sub"]               #get id of current user
             )
         },
         {

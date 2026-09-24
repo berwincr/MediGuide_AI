@@ -255,7 +255,7 @@ function Dashboard() {
                 lineHeight: "1.15",
               }}
             >
-              Welcome to MediGuide AI 👋
+              Welcome to MediGuide AI 
             </h1>
 
             <p
