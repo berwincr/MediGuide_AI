@@ -41,6 +41,8 @@ from app.services.scheduler import (
     stop_scheduler
 )
 
+from app.services.interaction_service import check_drug_interactions
+
 from app.gemini_service import (
     explain_medicine,
     explain_condition,
@@ -55,6 +57,7 @@ from app.models.reminder import (
     ReminderRequest,
     PushSubscription
 )
+from app.models.interaction import DrugInteractionRequest
 
 from app.security import (
     hash_password,
@@ -1309,3 +1312,13 @@ def save_push_subscription(
         "message": "Push subscription saved successfully"
     }
 
+
+@app.post("/drug-interactions")
+def drug_interactions(
+    request: DrugInteractionRequest
+):
+    result = check_drug_interactions(
+        request.medicines
+    )
+
+    return result
