@@ -6,11 +6,19 @@ from google import genai
 load_dotenv()
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_KEY_2 = os.getenv("GEMINI_API_KEY_2")
+GEMINI_API_KEY_3= os.getenv("GEMINI_API_KEY_3")
 
 #CLIENT CONNECTED
+<<<<<<< HEAD
 client = genai.Client(
     api_key=GEMINI_API_KEY
 )
+=======
+medicine_client = genai.Client(api_key=GEMINI_API_KEY)
+condition_client = genai.Client(api_key=GEMINI_API_KEY_2)
+chat_client = genai.Client(api_key=GEMINI_API_KEY_3)
+>>>>>>> 370ef98 (Api Key Extended)
 
 
 # --------------------------------------------------
@@ -83,14 +91,14 @@ Do not mix languages unless a medicine name or technical term must remain unchan
 
     models = [
         "gemini-flash-latest",
-        "gemini-3.5-flash",
+        "gemini-3.6-flash",
         "gemini-3.1-flash-lite"
     ]
 
     for model_name in models:
 
         try:
-            response = client.models.generate_content(
+            response = medicine_client.models.generate_content(
                 model=model_name,
                 contents=prompt
             )
@@ -271,14 +279,14 @@ Do not mix languages unnecessarily.
 
     models = [
         "gemini-flash-latest",
-        "gemini-3.5-flash",
+        "gemini-3.6-flash",
         "gemini-3.1-flash-lite"
     ]
 
     for model_name in models:
 
         try:
-            response = client.models.generate_content(
+            response = condition_client.models.generate_content(
                 model=model_name,
                 contents=prompt
             )
@@ -463,7 +471,7 @@ between messages.
 
     models = [
         "gemini-flash-latest",
-        "gemini-3.5-flash",
+        "gemini-3.6-flash",
         "gemini-3.1-flash-lite"
     ]
 
@@ -471,7 +479,7 @@ between messages.
 
         try:
 
-            response = client.models.generate_content(
+            response = chat_client.models.generate_content(
                 model=model_name,
                 contents=prompt
             )
