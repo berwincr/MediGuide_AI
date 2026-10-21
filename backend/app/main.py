@@ -24,7 +24,8 @@ from app.database import (
     users_collection,
     reminders_collection,
     chat_sessions_collection,
-    chat_messages_collection
+    chat_messages_collection,
+    symptom_records_collection
 )
 
 from app.services.ocr_service import extract_text
@@ -65,8 +66,16 @@ from app.security import (
     create_access_token,
     decode_access_token
 )
+from app.models.symptom import (
+    SymptomRecordRequest,
+    SymptomTextRequest
+)
 
-
+from app.services.symptom_preprocessing import preprocess_symptoms
+from app.services.symptom_analysis import (
+    analyze_symptoms,
+    check_symptom_mappings
+)
 app = FastAPI(
     title="MediGuide AI API"
 )
@@ -1322,3 +1331,164 @@ def drug_interactions(
     )
 
     return result
+
+
+# ==================================================
+# CREATE SYMPTOM RECORD
+# ==================================================
+
+@app.post("/symptoms")
+def create_symptom_record(
+    request: SymptomRecordRequest,
+    current_user=Depends(get_current_user)
+):
+    now = datetime.now(timezone.utc)
+
+    symptom_data = request.model_dump()
+
+    symptom_data["user_id"] = current_user["sub"]
+    symptom_data["created_at"] = now
+    symptom_data["updated_at"] = now
+
+    result = symptom_records_collection.insert_one(
+        symptom_data
+    )
+
+    return {
+        "message": "Symptom record saved successfully",
+        "record_id": str(result.inserted_id),
+        "created_at": now
+    }
+
+# ==================================================
+# GET SYMPTOM HISTORY
+# ==================================================
+
+@app.get("/symptoms")
+def get_symptom_history(
+    current_user=Depends(get_current_user)
+):
+    records = list(
+        symptom_records_collection.find(
+            {
+                "user_id": current_user["sub"]
+            }
+        ).sort("created_at", -1)
+
+    )
+
+    for record in records:
+        record["record_id"] = str(record.pop("_id"))
+
+        if record.get("created_at"):
+            record["created_at"] = record["created_at"].isoformat()
+
+        if record.get("updated_at"):
+            record["updated_at"] = record["updated_at"].isoformat()
+
+    return {
+        "count": len(records),
+        "records": records
+    }
+
+# ==================================================
+# PREPROCESS SYMPTOMS
+# ==================================================
+
+@app.post("/symptoms/preprocess")
+def preprocess_symptom_input(
+    request: dict,
+    current_user=Depends(get_current_user)
+):
+    text = request.get("text", "")
+
+    if not isinstance(text, str) or not text.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Please enter your symptoms"
+        )
+
+    result = preprocess_symptoms(text)
+
+    return {
+        "message": "Symptoms preprocessed successfully",
+        **result
+    }
+
+# ==================================================
+# RECORD SYMPTOMS FROM RAW TEXT
+# ==================================================
+
+@app.post("/symptoms/record")
+def record_symptoms_from_text(
+    request: SymptomTextRequest,
+    current_user=Depends(get_current_user)
+):
+    processed = preprocess_symptoms(request.text)
+
+    if not processed["symptoms"]:
+        raise HTTPException(
+            status_code=400,
+            detail="No valid symptoms found in the input"
+        )
+
+    now = datetime.now(timezone.utc)
+
+    symptom_data = {
+        "user_id": current_user["sub"],
+        "original_text": request.text,
+        "symptoms": processed["symptoms"],
+        "severity": request.severity,
+        "onset_date": request.onset_date,
+        "notes": request.notes,
+        "created_at": now,
+        "updated_at": now
+    }
+
+    result = symptom_records_collection.insert_one(
+        symptom_data
+    )
+
+    return {
+        "message": "Symptoms recorded successfully",
+        "record_id": str(result.inserted_id),
+        "original_text": request.text,
+        "processed_symptoms": processed["symptoms"],
+        "severity": request.severity,
+        "created_at": now
+    }
+
+# ANALYZE SYMPTOMS
+@app.post("/symptoms/analyze")
+def analyze_symptom_input(
+    request: SymptomRecordRequest,
+    current_user=Depends(get_current_user)
+):
+    symptom_names = [
+        item.name.strip().lower()
+        for item in request.symptoms
+        if item.name.strip()
+    ]
+
+    if not symptom_names:
+        raise HTTPException(
+            status_code=400,
+            detail="Please provide at least one symptom"
+        )
+
+    result = analyze_symptoms(symptom_names)
+
+    return {
+        "message": "Symptom analysis completed",
+        "symptoms": result["symptoms"],
+        "possible_conditions": result["conditions"],
+        "disclaimer": (
+            "These are informational matches, not a medical diagnosis."
+        )
+    }
+
+@app.get("/symptoms/debug-mappings")
+def debug_symptom_mappings(
+    current_user=Depends(get_current_user)
+):
+    return check_symptom_mappings()

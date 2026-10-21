@@ -69,17 +69,32 @@ const handleLogin = async (e) => {
       );
     }
 
-    // Save JWT token
-    localStorage.setItem("token", data.access_token);
+  
+   // Save JWT token
+localStorage.setItem("token", data.access_token);
 
-    // Save user information if returned by backend
-    if (data.user) {
-      localStorage.setItem(
-        "user",
-        JSON.stringify(data.user)
-      );
-    }
+// Fetch the authenticated user's profile
+const profileResponse = await fetch(
+  "http://127.0.0.1:8000/users/me",
+  {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${data.access_token}`,
+    },
+  }
+);
 
+if (!profileResponse.ok) {
+  throw new Error("Login succeeded, but fetching your profile failed.");
+}
+
+const profileData = await profileResponse.json();
+
+// Save the actual user profile
+localStorage.setItem(
+  "user",
+  JSON.stringify(profileData.user)
+);
     // Create Web Push subscription
     if (
       "serviceWorker" in navigator &&

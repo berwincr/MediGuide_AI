@@ -12,7 +12,10 @@ import MedicineDetails from "./pages/MedicineDetails";
 import AIChat from "./pages/AIChat";
 import OCR from "./pages/OCR";
 import Reminder from "./pages/Reminder";
-
+import DrugInteractions from "./pages/DrugInteractions";
+import SymptomTracker from "./pages/SymptomTracker";
+import Settings from "./pages/Settings";
+import Account from "./pages/Account";
 
 function App() {
   return (
@@ -99,7 +102,50 @@ function App() {
   }
 />
 
+<Route
+  path="/drug-interactions"
+  element={
+    <ProtectedRoute>
+      <AppLayout>
+        <DrugInteractions />
+      </AppLayout>
+    </ProtectedRoute>
+  }
+/>
 
+<Route
+  path="/symptoms"
+  element={
+    <ProtectedRoute>
+      <AppLayout>
+        <SymptomTracker />
+      </AppLayout>
+    </ProtectedRoute>
+  }
+/>
+
+
+<Route
+  path="/settings"
+  element={
+    <ProtectedRoute>
+      <AppLayout>
+        <Settings />
+      </AppLayout>
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path="/account"
+  element={
+    <ProtectedRoute>
+      <AppLayout>
+        <Account />
+      </AppLayout>
+    </ProtectedRoute>
+  }
+/>
       </Routes>
     </BrowserRouter>
   );
